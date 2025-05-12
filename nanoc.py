@@ -1,8 +1,7 @@
 from lark import Lark
 
 cpt = 0
-g = Lark(
-    """
+g = Lark("""
 IDENTIFIER: /[a-zA-Z_][a-zA-Z0-9]*/
 NUMBER: /[1-9][0-9]*/|"0" 
 OPBIN: /[+\-*\/>]/
@@ -20,50 +19,38 @@ commande: commande (";" commande)*   -> sequence
 program:"main" "(" liste_var ")" "{"commande"return" "("expression")" "}"
 %import common.WS
 %ignore WS
-""",
-    start="program",
-)
-
+""", start='program')
 
 def get_vars_expression(e):
     pass
 
-
 def get_vars_commande(c):
     pass
 
-
-op2asm = {"+": "add rax, rbx", "-": "sub rax, rbx"}
-
-
+op2asm = {'+' : 'add rax, rbx', '-': 'sub rax, rbx'}
 def asm_expression(e):
-    if e.data == "var":
-        return f"mov rax, [{e.children[0].value}]"
-    if e.data == "number":
-        return f"mov rax, {e.children[0].value}"
+    if e.data == "var": return f"mov rax, [{e.children[0].value}]"
+    if e.data == "number": return f"mov rax, {e.children[0].value}"
     e_left = e.children[0]
     e_op = e.children[1]
     e_right = e.children[2]
     asm_left = asm_expression(e_left)
     asm_right = asm_expression(e_right)
-    return f"""{asm_left}
+    return f"""{asm_left} 
 push rax
 {asm_right}
-pop rax
 mov rbx, rax
+pop rax
 {op2asm[e_op.value]}"""
-
 
 def asm_commande(c):
     global cpt
-    if c.data == "affectation":
+    if c.data == "affectation": 
         var = c.children[0]
         exp = c.children[1]
         return f"{asm_expression(exp)}\nmov [{var.value}], rax"
-    if c.data == "skip":
-        return "nop"
-    if c.data == "print":
-        return f"""{asm_expression(c.children[0])}
+    if c.data == "skip": return "nop"
+    if c.data == "print": return f"""{asm_expression(c.children[0])}
 mov rsi, fmt
 mov rdi, rax
 xor rax, rax
@@ -96,7 +83,7 @@ def asm_program(p):
     decl_vars = ""
     for i, c in enumerate(p.children[0].children):
         init_vars += f"""mov rbx, [argv]
-mov rdi, [rbx + {(i + 1) * 8}]
+mov rdi, [rbx + {(i+1)*8}]
 call atoi
 mov [{c.value}], rax
 """
@@ -105,27 +92,21 @@ mov [{c.value}], rax
     prog_asm = prog_asm.replace("DECL_VARS", decl_vars)
     asm_c = asm_commande(p.children[1])
     prog_asm = prog_asm.replace("COMMANDE", asm_c)
-    return prog_asm
-
+    return prog_asm    
 
 def pp_expression(e):
-    if e.data in ("var", "number"):
-        return f"{e.children[0].value}"
+    if e.data in ("var","number"): return f"{e.children[0].value}"
     e_left = e.children[0]
     e_op = e.children[1]
     e_right = e.children[2]
     return f"{pp_expression(e_left)} {e_op.value} {pp_expression(e_right)}"
-
-
 def pp_commande(c):
-    if c.data == "affectation":
+    if c.data == "affectation": 
         var = c.children[0]
         exp = c.children[1]
         return f"{var.value} = {pp_expression(exp)}"
-    if c.data == "skip":
-        return "skip"
-    if c.data == "print":
-        return f"printf({pp_expression(c.children[0])})"
+    if c.data == "skip": return "skip"
+    if c.data == "print": return f"printf({pp_expression(c.children[0])})"
     if c.data == "while":
         exp = c.children[0]
         body = c.children[1]
@@ -134,14 +115,13 @@ def pp_commande(c):
         d = c.children[0]
         tail = c.children[1]
         return f"{pp_commande(d)} ; {pp_commande(tail)}"
-
-
 if __name__ == "__main__":
     with open("simple.c") as f:
         src = f.read()
     ast = g.parse(src)
+    #print(pp_commande(ast))
     print(asm_program(ast))
-    # print(pp_commande(ast))
-# print(ast.children)
-# print(ast.children[0].type)
-# print(ast.children[0].value)
+    #print(pp_commande(ast))
+#print(ast.children)
+#print(ast.children[0].type)
+#print(ast.children[0].value)
