@@ -1,15 +1,20 @@
 from lark import Lark
 
 cpt = 0
-g = Lark("""
+g = Lark(r"""
 IDENTIFIER: /[a-zA-Z_][a-zA-Z0-9]*/
 NUMBER: /[1-9][0-9]*/|"0" 
-OPBIN: /[+\-*\/>]/
+STAR:"*"
+OPBIN: /[+\-]/
+STRING: /"[^"]*"/
+         
 liste_var:                            -> vide
     | IDENTIFIER ("," IDENTIFIER)*    -> vars
 expression: IDENTIFIER            -> var
     | expression OPBIN expression -> opbin
     | NUMBER                      -> number
+    | "char" STAR IDENTIFIER       -> char_p
+    | STRING                      -> string
 commande: commande (";" commande)*   -> sequence
     | "while" "(" expression ")" "{" commande "}" -> while
     | IDENTIFIER "=" expression              -> affectation
@@ -19,7 +24,7 @@ commande: commande (";" commande)*   -> sequence
 program:"main" "(" liste_var ")" "{"commande"return" "("expression")" "}"
 %import common.WS
 %ignore WS
-""", start='program')
+""", start='expression')
 
 def get_vars_expression(e):
     pass
@@ -95,7 +100,8 @@ mov [{c.value}], rax
     return prog_asm    
 
 def pp_expression(e):
-    if e.data in ("var","number"): return f"{e.children[0].value}"
+    if e.data in ("var","number","string"): return f"{e.children[0].value}"
+    if e.data == "char_p": return f"char* {e.children[1].value}"
     e_left = e.children[0]
     e_op = e.children[1]
     e_right = e.children[2]
@@ -115,13 +121,16 @@ def pp_commande(c):
         d = c.children[0]
         tail = c.children[1]
         return f"{pp_commande(d)} ; {pp_commande(tail)}"
+    
 if __name__ == "__main__":
     with open("simple.c") as f:
         src = f.read()
     ast = g.parse(src)
     #print(pp_commande(ast))
-    print(asm_program(ast))
+    #print(asm_program(ast))
     #print(pp_commande(ast))
+    print(pp_expression(ast))
+    #print(ast.pretty())
 #print(ast.children)
 #print(ast.children[0].type)
 #print(ast.children[0].value)
