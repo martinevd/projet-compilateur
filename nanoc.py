@@ -1,36 +1,32 @@
 from lark import Lark
 
 cpt = 0
-g = Lark("""
+g = Lark(r"""
 IDENTIFIER: /[a-zA-Z_][a-zA-Z0-9]*/
 NUMBER: /[1-9][0-9]*/|"0" 
-OPBIN: /[+\-*\/>]/
+OPBIN: /[+\-]/
 liste_var:                            -> vide
     | IDENTIFIER ("," IDENTIFIER)*    -> vars
 expression: IDENTIFIER            -> var
     | expression OPBIN expression -> opbin
     | NUMBER                      -> number
+    | IDENTIFIER "(" liste_var ")" -> call_function
 commande: commande (";" commande)*   -> sequence
     | "while" "(" expression ")" "{" commande "}" -> while
     | IDENTIFIER "=" expression              -> affectation
-|"if" "(" expression ")" "{" commande "}" ("else" "{" commande "}")? -> ite
-| "printf" "(" expression ")"                -> print
-| "skip"                                  -> skip
-program:"main" "(" liste_var ")" "{"commande"return" "("expression")" "}"
+    |"if" "(" expression ")" "{" commande "}" ("else" "{" commande "}")? -> ite
+    | "printf" "(" expression ")"                -> print
+    | "skip"                                  -> skip
+function: "funct" IDENTIFIER "(" liste_var ")" "{" commande "return" "(" expression ")" "}"
+program: function (function)*
 %import common.WS
 %ignore WS
-""", start='program')
-
-def get_vars_expression(e):
-    pass
-
-def get_vars_commande(c):
-    pass
+""", start='function')
 
 op2asm = {'+' : 'add rax, rbx', '-': 'sub rax, rbx'}
 def asm_expression(e):
     if e.data == "var": return f"mov rax, [{e.children[0].value}]"
-    if e.data == "number": return f"mov rax, {e.children[0].value}"
+    if e.data == "number": return f"mov rax, {e.children[0].value}" 
     e_left = e.children[0]
     e_op = e.children[1]
     e_right = e.children[2]
@@ -96,10 +92,18 @@ mov [{c.value}], rax
 
 def pp_expression(e):
     if e.data in ("var","number"): return f"{e.children[0].value}"
+    if e.data == "call_function":
+        name = e.children[0]
+        liste_vars = ""
+        for var in e.children[1].children:
+            liste_vars += var + ","
+        if len(liste_vars) > 0 : liste_vars = liste_vars[:-1]
+        return f"{name}({liste_vars})"
     e_left = e.children[0]
     e_op = e.children[1]
     e_right = e.children[2]
     return f"{pp_expression(e_left)} {e_op.value} {pp_expression(e_right)}"
+
 def pp_commande(c):
     if c.data == "affectation": 
         var = c.children[0]
@@ -115,13 +119,31 @@ def pp_commande(c):
         d = c.children[0]
         tail = c.children[1]
         return f"{pp_commande(d)} ; {pp_commande(tail)}"
+
+def pp_function(f):
+    name = f.children[0]
+    liste_vars = ""
+    for var in f.children[1].children:
+        liste_vars += var + ","
+    if len(liste_vars) > 0 : liste_vars = liste_vars[:-1]
+    c2 = f.children[2]
+    exp = f.children[3]
+    return f"""funct {name} ({liste_vars}){{
+    {pp_commande(c2)}
+    return ({pp_expression(exp)})
+}}"""
+
+
+
+
 if __name__ == "__main__":
+    """
     with open("simple.c") as f:
         src = f.read()
     ast = g.parse(src)
-    #print(pp_commande(ast))
     print(asm_program(ast))
-    #print(pp_commande(ast))
-#print(ast.children)
-#print(ast.children[0].type)
-#print(ast.children[0].value)
+    """
+
+    src = "funct maFonction(X,Y) {X = maFonction2(Y) return(X)}"
+    ast = g.parse(src)
+    print(pp_function(ast))
