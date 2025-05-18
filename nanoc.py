@@ -17,11 +17,13 @@ commande: commande (";" commande)*   -> sequence
     |"if" "(" expression ")" "{" commande "}" ("else" "{" commande "}")? -> ite
     | "printf" "(" expression ")"                -> print
     | "skip"                                  -> skip
-function: "funct" IDENTIFIER "(" liste_var ")" "{" commande "return" "(" expression ")" "}"
-program: function (function)*
+    | "return" "(" expression ")"           -> return
+function: "funct" IDENTIFIER "(" liste_var ")" "{" commande "}"
+program: liste_var function (liste_var function)*
+    
 %import common.WS
 %ignore WS
-""", start='function')
+""", start='program')
 
 op2asm = {'+' : 'add rax, rbx', '-': 'sub rax, rbx'}
 def asm_expression(e):
@@ -118,22 +120,33 @@ def pp_commande(c):
     if c.data == "sequence":
         d = c.children[0]
         tail = c.children[1]
-        return f"{pp_commande(d)} ; {pp_commande(tail)}"
+        return f"""{pp_commande(d)} ;
+    {pp_commande(tail)}"""
+    if c.data == "return":
+        return f"return ({pp_expression(c.children[0])})"
 
 def pp_function(f):
     name = f.children[0]
     liste_vars = ""
     for var in f.children[1].children:
         liste_vars += var + ","
-    if len(liste_vars) > 0 : liste_vars = liste_vars[:-1]
+    liste_vars = liste_vars[:-1]
     c2 = f.children[2]
-    exp = f.children[3]
     return f"""funct {name} ({liste_vars}){{
     {pp_commande(c2)}
-    return ({pp_expression(exp)})
 }}"""
 
-
+def pp_program(p):
+    output = ""
+    for i in range(0, len(p.children), 2):
+        vars = p.children[i]
+        fct = p.children[i+1]
+        liste_vars =""
+        for var in vars.children:
+            liste_vars += var + ", "
+        liste_vars = liste_vars[:-2]
+        output += f"{liste_vars}\n{pp_function(fct)}\n"
+    return output
 
 
 if __name__ == "__main__":
@@ -144,6 +157,6 @@ if __name__ == "__main__":
     print(asm_program(ast))
     """
 
-    src = "funct maFonction(X,Y) {X = maFonction2(Y) return(X)}"
+    src = "maVar1, maVar2, maVar3 funct maFonction(X,Y) {X = maFonction2(Y); Y = X+3; Z = 2; return(X)} maVar4 funct main(X){return (X)}"
     ast = g.parse(src)
-    print(pp_function(ast))
+    print(pp_program(ast))
