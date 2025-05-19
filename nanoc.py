@@ -3,7 +3,7 @@ from lark import Lark
 cpt = 0
 g = Lark("""
 IDENTIFIER: /[a-zA-Z_][a-zA-Z0-9]*/
-NUMBER: /[1-9][0-9]*/|"0" 
+NUMBER: /[1-9][0-9]*\.[0-9]+/|/0\.[0-9]+/|/[1-9][0-9]*/|"0" 
 OPBIN: /[+\-*\/>]/
 liste_var:                            -> vide
     | IDENTIFIER ("," IDENTIFIER)*    -> vars
@@ -20,6 +20,12 @@ program:"main" "(" liste_var ")" "{"commande"return" "("expression")" "}"
 %import common.WS
 %ignore WS
 """, start='program')
+
+# voir pour transformer:
+#       NUMBER: /[1-9][0-9]*\.[0-9]+/|/0\.[0-9]+/|/[1-9][0-9]*/|"0" 
+# en:
+#       INT: /[1-9][0-9]*/|"0" 
+#       FLOAT: /[1-9][0-9]*\.[0-9]+/|/0\.[0-9]+/c
 
 def get_vars_expression(e):
     pass
@@ -116,12 +122,16 @@ def pp_commande(c):
         tail = c.children[1]
         return f"{pp_commande(d)} ; {pp_commande(tail)}"
 if __name__ == "__main__":
-    with open("simple.c") as f:
-        src = f.read()
-    ast = g.parse(src)
+    """with open("simple.c") as f:
+        src = f.read()"""
+    """ast = g.parse(src)"""
+
+    print(pp_expression(3))
+    print(pp_expression(3.14))
+    
     #print(pp_commande(ast))
-    print(asm_program(ast))
+    #print(asm_program(ast))
     #print(pp_commande(ast))
-#print(ast.children)
-#print(ast.children[0].type)
-#print(ast.children[0].value)
+    #print(ast.children)
+    #print(ast.children[0].type)
+    #print(ast.children[0].value)
