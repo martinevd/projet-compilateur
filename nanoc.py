@@ -1,10 +1,18 @@
 from lark import Lark
 
 cpt = 0
+last_stack_variable = 0
+
+""" For the implementation of static types, I decided to
+
+"""
+
+
 g = Lark(
     """
 IDENTIFIER: /[a-zA-Z_][a-zA-Z0-9]*/
-NUMBER: /[1-9][0-9]*/|"0" 
+TYPE: "int"|"double"|"char"|"bool"
+NUMBER: /[1-9][0-9]*/|"0"
 OPBIN: /[+\-*\/>]/
 liste_var:                            -> vide
     | IDENTIFIER ("," IDENTIFIER)*    -> vars
@@ -14,6 +22,7 @@ expression: IDENTIFIER            -> var
 commande: commande (";" commande)*   -> sequence
     | "while" "(" expression ")" "{" commande "}" -> while
     | IDENTIFIER "=" expression              -> affectation
+    | TYPE IDENTIFIER "=" expression -> declaration
 |"if" "(" expression ")" "{" commande "}" ("else" "{" commande "}")? -> ite
 | "printf" "(" expression ")"                -> print
 | "skip"                                  -> skip
@@ -34,6 +43,8 @@ def get_vars_commande(c):
 
 
 op2asm = {"+": "add rax, rbx", "-": "sub rax, rbx"}
+variables_adresses = {}
+var_size = {"int": 4, "double": 4, "char": 2, "bool": 1}
 
 
 def asm_expression(e):
@@ -49,21 +60,44 @@ def asm_expression(e):
     return f"""{asm_left}
 push rax
 {asm_right}
-pop rax
 mov rbx, rax
+pop rax
 {op2asm[e_op.value]}"""
 
 
 def asm_commande(c):
+    global last_stack_variable
     global cpt
+    if c.data == "declaration":
+        type_var = c.children[0]
+        var = c.children[1]
+        exp = c.children[2]
+        size = var_size[type_var]
+        last_stack_variable -= size
+        variables_adresses[var] = (size, last_stack_variable)
+        return f"""
+push rbp
+mov rbp, rsp
+sub rsp, {size}
+{asm_expression(exp)}
+mov [rbp{last_stack_variable}], rax
+pop rbp
+"""
     if c.data == "affectation":
         var = c.children[0]
         exp = c.children[1]
+        # Check for declaration before affectation
+        if var not in variables_adresses:
+            raise Exception(f"Undefined variable {var}")
+
         return f"{asm_expression(exp)}\nmov [{var.value}], rax"
+
     if c.data == "skip":
         return "nop"
     if c.data == "print":
         return f"""{asm_expression(c.children[0])}
+
+
 mov rsi, fmt
 mov rdi, rax
 xor rax, rax
@@ -74,7 +108,7 @@ call printf
         body = c.children[1]
         idx = cpt
         cpt += 1
-        return f"""loop{idx}:{asm_expression(exp)}
+        return f"""loop{idx}: {asm_expression(exp)}
 cmp rax, 0
 jz end{idx}
 {asm_commande(body)}
@@ -98,7 +132,7 @@ def asm_program(p):
         init_vars += f"""mov rbx, [argv]
 mov rdi, [rbx + {(i + 1) * 8}]
 call atoi
-mov [{c.value}], rax
+mov[{c.value}], rax
 """
         decl_vars += f"{c.value}: dq 0\n"
     prog_asm = prog_asm.replace("INIT_VARS", init_vars)
@@ -118,6 +152,11 @@ def pp_expression(e):
 
 
 def pp_commande(c):
+    if c.data == "declaration":
+        type_var = c.children[0]
+        var = c.children[1]
+        exp = c.children[2]
+        return f"{type_var} {var.value} = {pp_expression(exp)}"
     if c.data == "affectation":
         var = c.children[0]
         exp = c.children[1]
@@ -140,8 +179,14 @@ if __name__ == "__main__":
     with open("simple.c") as f:
         src = f.read()
     ast = g.parse(src)
-    print(asm_program(ast))
     # print(pp_commande(ast))
+    print(asm_program(ast))
+    print(variables_adresses)
+    print(var_size)
+    # print(ast)
+    # print(ast.children[1])
+    # print(ast.children[0])
+    # print(pp_commande(ast.children[1]))
 # print(ast.children)
 # print(ast.children[0].type)
 # print(ast.children[0].value)
