@@ -12,7 +12,6 @@ section .text
 main:
 push rbp
 mov [argv], rsi
-pop rbp
 
 INIT_VARS
 COMMANDE
@@ -22,6 +21,7 @@ mov rsi, rax
 xor rax, rax
 call printf
 
+VIDE_MEMOIRE
 pop rbp
 ret
 

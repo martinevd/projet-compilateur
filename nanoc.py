@@ -26,7 +26,7 @@ commande: commande (";" commande)*   -> sequence
 |"if" "(" expression ")" "{" commande "}" ("else" "{" commande "}")? -> ite
 | "printf" "(" expression ")"                -> print
 | "skip"                                  -> skip
-program:"main" "(" liste_var ")" "{"commande"return" "("expression")" "}"
+program:"main" "(" liste_var ")" "{"commande"return("expression")" "}"
 %import common.WS
 %ignore WS
 """,
@@ -44,14 +44,14 @@ def get_vars_commande(c):
 
 op2asm = {"+": "add rax, rbx", "-": "sub rax, rbx"}
 variables_adresses = {}
-var_size = {"int": 4, "double": 4, "char": 2, "bool": 1}
+var_size = {"int": 4, "double": 4, "char": 4, "bool": 4}
 
 
 def asm_expression(e):
     if e.data == "var":
-        return f"mov rax, [{e.children[0].value}]"
+        return f"mov rax, [rbp{variables_adresses[e.children[0]][0]}]"
     if e.data == "number":
-        return f"mov rax, {e.children[0].value}"
+        return f"mov rax, {e.children[0]}"
     e_left = e.children[0]
     e_op = e.children[1]
     e_right = e.children[2]
@@ -78,7 +78,6 @@ def type_of_expression(e):
         return variables_adresses[e.children[0].value][2]
     if e.data == "opbin":
         e_left = e.children[0]
-        e_op = e.children[1]
         e_right = e.children[2]
         type_left_exp = transfo_int_number(type_of_expression(e_left))
         type_right_exp = transfo_int_number(type_of_expression(e_right))
@@ -100,12 +99,9 @@ def asm_commande(c):
         last_stack_variable -= size
         variables_adresses[var] = (last_stack_variable, size, type_var.value)
         return f"""
-push rbp
-mov rbp, rsp
 sub rsp, {size}
 {asm_expression(exp)}
 mov [rbp{last_stack_variable}], rax
-pop rbp
 """
     if c.data == "affectation":
         var = c.children[0]
@@ -114,23 +110,17 @@ pop rbp
         if var not in variables_adresses:
             raise Exception(f"Undefined variable {var}")
         if type_of_expression(exp) != variables_adresses[var][2]:
-            print(type_of_expression(exp))
-            print(variables_adresses[var][2])
             raise TypeError(f"Expression {exp} is not the same type as {var}")
 
         return f"""
-push rbp
 {asm_expression(exp)}
 mov [rbp{variables_adresses[var.value][0]}], rax
-pop rbp
 """
 
     if c.data == "skip":
         return "nop"
     if c.data == "print":
         return f"""{asm_expression(c.children[0])}
-
-
 mov rsi, fmt
 mov rdi, rax
 xor rax, rax
@@ -157,6 +147,7 @@ end{idx}: nop
 def asm_program(p):
     with open("moule.asm") as f:
         prog_asm = f.read()
+    asm_c = asm_commande(p.children[1])
     ret = asm_expression(p.children[2])
     prog_asm = prog_asm.replace("RETOUR", ret)
     init_vars = ""
@@ -170,8 +161,8 @@ mov[{c.value}], rax
         decl_vars += f"{c.value}: dq 0\n"
     prog_asm = prog_asm.replace("INIT_VARS", init_vars)
     prog_asm = prog_asm.replace("DECL_VARS", decl_vars)
-    asm_c = asm_commande(p.children[1])
     prog_asm = prog_asm.replace("COMMANDE", asm_c)
+    prog_asm = prog_asm.replace("VIDE_MEMOIRE", f"add rsp, {-last_stack_variable}")
     return prog_asm
 
 
@@ -214,7 +205,6 @@ if __name__ == "__main__":
     ast = g.parse(src)
     # print(pp_commande(ast))
     print(asm_program(ast))
-    # print(variables_adresses)
     # print(var_size)
     # print(ast)
     # print(ast.children[1])
