@@ -45,7 +45,7 @@ mov [rbp - 8], rdi
 mov [rbp - 16], rsi
 loop0:mov rax, [rbp - 16]
 cmp rax, 0
-jz end0
+jz else0
 mov rax, [rbp - 8] 
 push rax
 mov rax, 1
@@ -60,12 +60,22 @@ mov rbx, rax
 pop rax
 sub rax, rbx
 mov [rbp - 16], rax
-jmp loop0
-end0: nop
-
+mov rax, [rbp - 16]
+push rax
 mov rax, [rbp - 8]
+push rax
+pop rdi
+pop rsi
+call add
+
     jmp end_add
     
+jmp end0
+else0: mov rax, [rbp - 8]
+    jmp end_add
+    
+end0: nop
+
 end_add:
     mov rsp, rbp
     pop rbp

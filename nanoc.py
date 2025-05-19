@@ -84,6 +84,23 @@ jz end{idx}
 jmp loop{idx}
 end{idx}: nop
 """
+    if c.data == "ite":
+        output = ""
+        exp = c.children[0]
+        body_if = c.children[1] 
+        idx = cpt
+        cpt += 1
+        output = f"""loop{idx}:{asm_expression(exp,var_locales)}
+cmp rax, 0
+jz else{idx}
+{asm_commande(body_if,var_locales,label_funct)}
+jmp end{idx}
+"""
+        if len(c.children) > 2:
+            body_else = c.children[2] 
+            output += f"else{idx}: {asm_commande(body_else,var_locales,label_funct)}\n"
+        output += f"end{idx}: nop\n"
+        return output
     if c.data == "sequence":
         d = c.children[0]
         tail = c.children[1]

@@ -1,9 +1,11 @@
 funct add(a,b){
-    while(b){
+    if(b){
         a = a + 1 ;
-        b = b - 1
-    } ;
-    return (a)
+        b = b - 1 ;
+        return (add(a,b)) 
+    }else{
+        return (a)
+    }
 }
 
 X, Y
