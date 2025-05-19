@@ -1,7 +1,13 @@
-main(X,Y){
-    while(X){
-        X = X - 1;
-        Y = Y + 1
-    }
-    return(Y)
+funct add(a,b){
+    while(b){
+        a = a + 1 ;
+        b = b - 1
+    } ;
+    return (a)
+}
+
+X, Y
+
+funct main(X,Y){
+    return (add(X,Y))
 }
