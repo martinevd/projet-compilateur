@@ -65,6 +65,30 @@ pop rax
 {op2asm[e_op.value]}"""
 
 
+def transfo_int_number(s):
+    if s == "int" or s == "double":
+        return "NUMBER"
+    return s
+
+
+def type_of_expression(e):
+    if e.data == "number":
+        return "int"
+    if e.data == "var":
+        return variables_adresses[e.children[0].value][2]
+    if e.data == "opbin":
+        e_left = e.children[0]
+        e_op = e.children[1]
+        e_right = e.children[2]
+        type_left_exp = transfo_int_number(type_of_expression(e_left))
+        type_right_exp = transfo_int_number(type_of_expression(e_right))
+        if type_left_exp != type_right_exp:
+            raise TypeError(
+                f"Expression of the left {e_left} is not the same type as the one on the right {e_right}"
+            )
+        return type_of_expression(e_left)
+
+
 def asm_commande(c):
     global last_stack_variable
     global cpt
@@ -74,7 +98,7 @@ def asm_commande(c):
         exp = c.children[2]
         size = var_size[type_var]
         last_stack_variable -= size
-        variables_adresses[var] = (size, last_stack_variable)
+        variables_adresses[var] = (last_stack_variable, size, type_var.value)
         return f"""
 push rbp
 mov rbp, rsp
@@ -89,8 +113,17 @@ pop rbp
         # Check for declaration before affectation
         if var not in variables_adresses:
             raise Exception(f"Undefined variable {var}")
+        if type_of_expression(exp) != variables_adresses[var][2]:
+            print(type_of_expression(exp))
+            print(variables_adresses[var][2])
+            raise TypeError(f"Expression {exp} is not the same type as {var}")
 
-        return f"{asm_expression(exp)}\nmov [{var.value}], rax"
+        return f"""
+push rbp
+{asm_expression(exp)}
+mov [rbp{variables_adresses[var.value][0]}], rax
+pop rbp
+"""
 
     if c.data == "skip":
         return "nop"
@@ -181,8 +214,8 @@ if __name__ == "__main__":
     ast = g.parse(src)
     # print(pp_commande(ast))
     print(asm_program(ast))
-    print(variables_adresses)
-    print(var_size)
+    # print(variables_adresses)
+    # print(var_size)
     # print(ast)
     # print(ast.children[1])
     # print(ast.children[0])
