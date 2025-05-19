@@ -8,6 +8,6 @@ funct add(a,b){
 
 X, Y
 
-funct main(X,Y){
+funct main(){
     return (add(X,Y))
 }

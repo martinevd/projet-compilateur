@@ -74,12 +74,9 @@ end_add:
 main_function:
 push rbp
     mov rbp, rsp
-    sub rsp, 16
-mov [rbp - 8], rdi
-mov [rbp - 16], rsi
-mov rax, [rbp - 16]
+    mov rax, [Y]
 push rax
-mov rax, [rbp - 8]
+mov rax, [X]
 push rax
 pop rdi
 pop rsi

@@ -114,7 +114,7 @@ def asm_function(fct):
     var_locales = {}
     for i,var in enumerate(liste_vars):
         offset = (i+1) * 8
-        var_locales[var.value] = offset #Pour le moment on dit que les objets font 1 octet
+        var_locales[var.value] = offset
         output += f"mov [rbp - {offset}], {registres_input[i]}\n"
 
     #Faire les commandes
