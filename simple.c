@@ -1,14 +1,21 @@
-funct add(a,b){
-    if(b){
-        a = a + 1 ;
-        b = b - 1 ;
-        return (add(a,b)) 
-    };
-    return (a)
+funct add(b){
+    if (b){
+        add1(b)
+    }
+    
+}
+
+funct add1(b){
+    c
+
+    X = X + 1;
+    c = b - 1;
+    add(c)
 }
 
 X, Y
 
 funct main(){
-    return (add(X,Y))
+    add(Y);
+    return(X)
 }

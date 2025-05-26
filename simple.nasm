@@ -40,20 +40,38 @@ mov [Y], rax
 add:
 push rbp
     mov rbp, rsp
-    sub rsp, 16
+    sub rsp, 8
 mov [rbp - 8], rdi
-mov [rbp - 16], rsi
-if0:mov rax, [rbp - 16]
+if0:mov rax, [rbp - 8]
 cmp rax, 0
 jz else0
-mov rax, [rbp - 8] 
+mov rax, [rbp - 8]
+push rax
+pop rdi
+call add1
+
+jmp end0
+else0: nop
+end0: nop
+
+end_add:
+    mov rsp, rbp
+    pop rbp
+    ret
+    
+add1:
+push rbp
+    mov rbp, rsp
+    sub rsp, 16
+mov [rbp - 8], rdi
+mov rax, [X] 
 push rax
 mov rax, 1
 mov rbx, rax
 pop rax
 add rax, rbx
-mov [rbp - 8], rax
-mov rax, [rbp - 16] 
+mov [X], rax
+mov rax, [rbp - 8] 
 push rax
 mov rax, 1
 mov rbx, rax
@@ -62,22 +80,10 @@ sub rax, rbx
 mov [rbp - 16], rax
 mov rax, [rbp - 16]
 push rax
-mov rax, [rbp - 8]
-push rax
 pop rdi
-pop rsi
 call add
 
-    jmp end_add
-    
-jmp end0
-else0: nop
-end0: nop
-
-mov rax, [rbp - 8]
-    jmp end_add
-    
-end_add:
+end_add1:
     mov rsp, rbp
     pop rbp
     ret
@@ -87,12 +93,10 @@ push rbp
     mov rbp, rsp
     mov rax, [Y]
 push rax
-mov rax, [X]
-push rax
 pop rdi
-pop rsi
 call add
 
+mov rax, [X]
     jmp end_main_function
     
 end_main_function:
