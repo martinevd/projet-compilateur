@@ -90,15 +90,16 @@ end{idx}: nop
         body_if = c.children[1] 
         idx = cpt
         cpt += 1
-        output = f"""loop{idx}:{asm_expression(exp,var_locales)}
+        output = f"""if{idx}:{asm_expression(exp,var_locales)}
 cmp rax, 0
 jz else{idx}
 {asm_commande(body_if,var_locales,label_funct)}
 jmp end{idx}
+else{idx}: nop
 """
         if len(c.children) > 2:
             body_else = c.children[2] 
-            output += f"else{idx}: {asm_commande(body_else,var_locales,label_funct)}\n"
+            output += f"{asm_commande(body_else,var_locales,label_funct)}\n"
         output += f"end{idx}: nop\n"
         return output
     if c.data == "sequence":

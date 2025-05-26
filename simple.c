@@ -3,9 +3,8 @@ funct add(a,b){
         a = a + 1 ;
         b = b - 1 ;
         return (add(a,b)) 
-    }else{
-        return (a)
-    }
+    };
+    return (a)
 }
 
 X, Y

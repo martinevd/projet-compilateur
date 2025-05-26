@@ -43,7 +43,7 @@ push rbp
     sub rsp, 16
 mov [rbp - 8], rdi
 mov [rbp - 16], rsi
-loop0:mov rax, [rbp - 16]
+if0:mov rax, [rbp - 16]
 cmp rax, 0
 jz else0
 mov rax, [rbp - 8] 
@@ -71,11 +71,12 @@ call add
     jmp end_add
     
 jmp end0
-else0: mov rax, [rbp - 8]
-    jmp end_add
-    
+else0: nop
 end0: nop
 
+mov rax, [rbp - 8]
+    jmp end_add
+    
 end_add:
     mov rsp, rbp
     pop rbp
