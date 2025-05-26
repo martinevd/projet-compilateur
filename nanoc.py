@@ -1,4 +1,5 @@
 from lark import Lark
+from context import VariableContext,FunctionContext,GlobalContext
 
 # ══════════════════════════════
 # GRAMMAIRE
@@ -45,10 +46,10 @@ op2asm = {'+' : 'add rax, rbx', '-': 'sub rax, rbx'}
 #Registres utilisés par convention pour les inputs d'une fonction
 registres_input = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
 
-#Ensemble des définitions
-defi = {"var":{},"func":{}}
+#Contexte du programme
+global_ctx = GlobalContext()
 
-def asm_expression(e,nom_funct):
+def asm_expression(e,name_fct):
     """
     Génère le code assembleur d'une expression à partir de son arbre syntaxique.
 
@@ -56,7 +57,7 @@ def asm_expression(e,nom_funct):
 
     Args:
         e (Tree): L'arbre syntaxique de l'expression.
-        nom_funct (str): Le nom de la fonction en cours de compilation, utilisé pour 
+        name_fct (str): Le nom de la fonction en cours de compilation, utilisé pour 
                          accéder à son contexte local (arguments, variables locales) 
                          dans la structure de définition du programme.
 
@@ -64,19 +65,16 @@ def asm_expression(e,nom_funct):
         str: Le code assembleur correspondant à l'expression.
     """
 
-    contexte_loc = defi["func"][nom_funct]
-
     #Variable
     if e.data == "var": 
-        var = e.children[0]
+        nom_var = e.children[0]
+
+        var_ctx = global_ctx.get_variable(nom_var,name_fct)
         #Vérifie si la variable existe bien d'abord en local puis en global
-        if var.value in contexte_loc["var"]:
-            return f"mov rax, [rbp - {contexte_loc["var"][var.value]["offset"]}]"
-        elif var.value in contexte_loc["arg"]:
-            return f"mov rax, [rbp - {contexte_loc["arg"][var.value]["offset"]}]"
-        elif var.value in defi["var"]:
-            return f"mov rax, [{var.value}]"
-        raise NameError(f"Variable non définie : '{var.value}'")
+        if var_ctx.offset :
+            return f"mov rax, [rbp - {var_ctx.offset}]"
+        return f"mov rax, [{nom_var}]"
+        
     
     #Nombre
     if e.data == "number": 
@@ -85,25 +83,25 @@ def asm_expression(e,nom_funct):
     #Appel de fonction avec retour
     if e.data == "call_function_expr":
         output = ""
-        funct_to_call = e.children[0].value
+        fct_to_call = e.children[0].value
 
         #Vérifie que la fonction est bien definie
-        if funct_to_call not in defi["func"]:
-            raise NameError(f"Fonction non définie : '{funct_to_call}'")
+        if not global_ctx.has_function(fct_to_call):
+            raise NameError(f"Fonction non définie : '{fct_to_call}'")
         
         liste_exprs = e.children[1].children
 
         #Vérifie que l'on appelle bien la fonction avec le bon nombre d'arguments
-        if len(liste_exprs) != len(defi["func"][funct_to_call]["arg"]):
-            raise TypeError(f"La fonction '{funct_to_call}' attend {len(defi["func"][funct_to_call]["arg"])} arguments, mais {len(liste_exprs)} ont été fournis.")
+        if len(liste_exprs) != global_ctx.nb_args(fct_to_call):
+            raise TypeError(f"La fonction '{fct_to_call}' attend {global_ctx.nb_args(fct_to_call)} arguments, mais {len(liste_exprs)} ont été fournis.")
         
         #Utilisation d'une pile => On traite les éléments dans le sens inverse
         for expr in reversed(liste_exprs):
-            output += asm_expression(expr,nom_funct) + "\n"
+            output += asm_expression(expr,name_fct) + "\n"
             output += "push rax\n"
         for i in range(len(liste_exprs)):
             output += f"pop {registres_input[i]}\n"
-        output += f"call {funct_to_call}\n"
+        output += f"call {fct_to_call}\n"
         return output
     
     #Opération binaire
@@ -111,8 +109,8 @@ def asm_expression(e,nom_funct):
         e_left = e.children[0]
         e_op = e.children[1]
         e_right = e.children[2]
-        asm_left = asm_expression(e_left,nom_funct)
-        asm_right = asm_expression(e_right,nom_funct)
+        asm_left = asm_expression(e_left,name_fct)
+        asm_right = asm_expression(e_right,name_fct)
         return f"""{asm_left} 
 push rax
 {asm_right}
@@ -123,7 +121,7 @@ pop rax
     #Erreur si e n'est pas une expression valide
     raise ValueError(f"Type d'expression non pris en charge : {e.data}") 
 
-def asm_commande(c,nom_funct):
+def asm_commande(c,name_fct):
     """
     Génère le code assembleur d'une commande à partir de son arbre syntaxique.
 
@@ -131,7 +129,7 @@ def asm_commande(c,nom_funct):
 
     Args:
         c (Tree): L'arbre syntaxique de la commande.
-        nom_funct (str): Le nom de la fonction en cours de compilation, utilisé pour 
+        name_fct (str): Le nom de la fonction en cours de compilation, utilisé pour 
                          accéder à son contexte local (arguments, variables locales) 
                          dans la structure de définition du programme.
 
@@ -142,26 +140,22 @@ def asm_commande(c,nom_funct):
     #Utiliser le compteur global
     global cpt
 
-    contexte_loc = defi["func"][nom_funct]
-
     #Affectation
     if c.data == "affectation": 
-        var = c.children[0]
+        name_var = c.children[0]
         exp = c.children[1]
+
+        var_ctx = global_ctx.get_variable(name_var,name_fct)
         #Vérifie si la variable existe bien d'abord en local puis en global
-        if var.value in contexte_loc["var"]:
-            return f"{asm_expression(exp,nom_funct)}\nmov [rbp - {contexte_loc["var"][var.value]["offset"]}], rax"
-        elif var.value in contexte_loc["arg"]:
-            return f"{asm_expression(exp,nom_funct)}\nmov [rbp - {contexte_loc["arg"][var.value]["offset"]}], rax"
-        elif var.value in defi["var"]:
-            return f"{asm_expression(exp,nom_funct)}\nmov [{var.value}], rax"
-        raise NameError(f"Variable non définie : '{var.value}'")
+        if var_ctx.offset:
+            return f"{asm_expression(exp,name_fct)}\nmov [rbp - {var_ctx.offset}], rax"
+        return f"{asm_expression(exp,name_fct)}\nmov [{name_var}], rax"
     
     #Skip
     if c.data == "skip": return "nop"
     
     #Print
-    if c.data == "print": return f"""{asm_expression(c.children[0],nom_funct)}
+    if c.data == "print": return f"""{asm_expression(c.children[0],name_fct)}
 mov rsi, rax
 mov rdi, fmt_int
 xor rax, rax
@@ -174,10 +168,10 @@ call printf
         body = c.children[1]
         idx = cpt
         cpt += 1
-        return f"""loop{idx}:{asm_expression(exp,nom_funct)}
+        return f"""loop{idx}:{asm_expression(exp,name_fct)}
 cmp rax, 0
 jz end{idx}
-{asm_commande(body,nom_funct)}
+{asm_commande(body,name_fct)}
 jmp loop{idx}
 end{idx}: nop
 """
@@ -189,10 +183,10 @@ end{idx}: nop
         body_if = c.children[1] 
         idx = cpt
         cpt += 1
-        output = f"""if{idx}:{asm_expression(exp,nom_funct)}
+        output = f"""if{idx}:{asm_expression(exp,name_fct)}
 cmp rax, 0
 jz else{idx}
-{asm_commande(body_if,nom_funct)}
+{asm_commande(body_if,name_fct)}
 jmp end{idx}
 else{idx}: nop
 """
@@ -200,7 +194,7 @@ else{idx}: nop
         #S'il y a un else
         if len(c.children) > 2:
             body_else = c.children[2] 
-            output += f"{asm_commande(body_else,nom_funct)}\n"
+            output += f"{asm_commande(body_else,name_fct)}\n"
         output += f"end{idx}: nop\n"
         return output
     
@@ -208,37 +202,37 @@ else{idx}: nop
     if c.data == "sequence":
         d = c.children[0]
         tail = c.children[1]
-        return f"""{asm_commande(d,nom_funct)}
-{asm_commande(tail,nom_funct)}"""
+        return f"""{asm_commande(d,name_fct)}
+{asm_commande(tail,name_fct)}"""
     
     #Retour de fonction (besoin du label de la fonction pour retourner 
     #au bon endroit du code)
     if c.data == "return": 
-        return f"""{asm_expression(c.children[0], nom_funct)}
-    jmp end_{nom_funct}
+        return f"""{asm_expression(c.children[0], name_fct)}
+    jmp end_{name_fct}
     """
 
     #Appel de fonction sans retour
     if c.data == "call_function_cmd":
         output = ""
-        funct_to_call = c.children[0].value
+        fct_to_call = c.children[0].value
 
         #Vérifie que la fonction est bien definie
-        if funct_to_call not in defi["func"]:
-            raise NameError(f"Fonction non définie : '{funct_to_call}'")
+        if not global_ctx.has_function(fct_to_call):
+            raise NameError(f"Fonction non définie : '{fct_to_call}'")
         
         liste_exprs = c.children[1].children
 
         #Vérifie que l'on appelle bien la fonction avec le bon nombre d'arguments
-        if len(liste_exprs) != len(defi["func"][funct_to_call]["arg"]):
-            raise TypeError(f"La fonction {funct_to_call} attend {len(defi["func"][funct_to_call]["arg"])} arguments, mais {len(liste_exprs)} ont été fournis.")
+        if len(liste_exprs) != global_ctx.nb_args(fct_to_call):
+            raise TypeError(f"La fonction {fct_to_call} attend {global_ctx.nb_args(fct_to_call)} arguments, mais {len(liste_exprs)} ont été fournis.")
         
         for expr in reversed(liste_exprs):
-            output += asm_expression(expr, nom_funct) + "\n"
+            output += asm_expression(expr, name_fct) + "\n"
             output += "push rax\n"
         for i in range(len(liste_exprs)):
             output += f"pop {registres_input[i]}\n"
-        output += f"call {funct_to_call}\n"
+        output += f"call {fct_to_call}\n"
         return output
 
     #Erreur si c n'est pas une commande valide
@@ -255,14 +249,12 @@ def asm_function(fct):
         str: Le code assembleur correspondant à la fonction.
     """
 
-    nom_fct = fct.children[0].value
+    name_fct = fct.children[0].value
     liste_vars_arg = fct.children[1].children
     liste_vars_loc = fct.children[2].children
     commande = fct.children[3]
 
-    contexte_loc = defi["func"][nom_fct]
-
-    output = f"{nom_fct}:\n"
+    output = f"{name_fct}:\n"
 
     #Initialisation de la pile
     output += f"""push rbp
@@ -276,21 +268,21 @@ def asm_function(fct):
     #Sauvegarde des arguments
     for var in liste_vars_arg:
         offset = (i+1)*8
-        contexte_loc["arg"][var.value]["offset"] = offset
+        global_ctx.set_offset_arg(var.value,name_fct,offset)
         output += f"mov [rbp - {offset}], {registres_input[i]}\n"
         i += 1
 
     #Sauvegarde des variables locales
     for var in liste_vars_loc:
         offset = (i+1)*8
-        contexte_loc["var"][var.value]["offset"] = offset
+        global_ctx.set_offset_local(var.value,name_fct,offset)
         i += 1
 
     #Exécution les commandes
-    output += f"{asm_commande(commande,nom_fct)}\n"
+    output += f"{asm_commande(commande,name_fct)}\n"
 
     #Nettoyage de la pile
-    output += f"""end_{nom_fct}:
+    output += f"""end_{name_fct}:
     mov rsp, rbp
     pop rbp
     ret
@@ -320,17 +312,17 @@ def asm_program(p):
     init_vars = ""
     
     #Code assembleur des fonctions (interprété comme COMMANDE)
-    asm_c = ""
+    asm_f = ""
 
     #Recherche des variables globales
     for i in range(0, len(p.children), 2):
         vars = p.children[i]
         for var in vars.children:
             #Ajout des variables globales dans la liste des définitions du programme
-            defi["var"][var.value] = {}
+            global_ctx.add_global(VariableContext(var.value,"int"))
 
     #Déclaration et initialisation des variables globales
-    for i,var in enumerate(defi["var"]):
+    for i,var in enumerate(global_ctx.globals):
         decl_vars += f"{var}: dq 0\n"
         init_vars += f"""mov rbx, [argv]
 mov rdi, [rbx + {(i+1)*8}]
@@ -350,22 +342,25 @@ mov [{var}], rax
             fct.children[0].value = "main_function"
             prog_asm = prog_asm.replace("CALL_MAIN", "call main_function")
 
-        nom_fct = fct.children[0].value
+        name_fct = fct.children[0].value
 
         #Pour faire en sorte que l'ordre d'implémentation de fonctions n'est pas 
         #d'importance
         liste_args = fct.children[1].children
-        liste_vars = fct.children[2].children
+        liste_locals = fct.children[2].children
 
-        defi["func"][nom_fct] = {
-            "arg": {var.value: {} for var in liste_args},
-            "var": {var.value: {} for var in liste_vars}}
+        fct_ctx = FunctionContext(name_fct)
+        for arg in liste_args :
+            fct_ctx.add_arg(VariableContext(arg.value,"int"))
+        for local in liste_locals :
+            fct_ctx.add_local(VariableContext(local.value,"int"))
+        global_ctx.add_function(fct_ctx)
 
     #Compilation des fonctions
     for i in range(1, len(p.children), 2):
-        asm_c += f"{asm_function(p.children[i])}\n"
+        asm_f += f"{asm_function(p.children[i])}\n"
     
-    prog_asm = prog_asm.replace("COMMANDE", asm_c)
+    prog_asm = prog_asm.replace("COMMANDE", asm_f)
     return prog_asm 
 
 
