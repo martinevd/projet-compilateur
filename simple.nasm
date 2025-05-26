@@ -40,9 +40,11 @@ mov [Y], rax
 add:
 push rbp
     mov rbp, rsp
-    sub rsp, 8
+    sub rsp, 16
 mov [rbp - 8], rdi
-if0:mov rax, [rbp - 8]
+mov rax, [rbp - 8]
+mov [rbp - 16], rax
+if0:mov rax, [rbp - 16]
 cmp rax, 0
 jz else0
 mov rax, [rbp - 8]
@@ -62,7 +64,7 @@ end_add:
 add1:
 push rbp
     mov rbp, rsp
-    sub rsp, 16
+    sub rsp, 8
 mov [rbp - 8], rdi
 mov rax, [X] 
 push rax
@@ -77,8 +79,6 @@ mov rax, 1
 mov rbx, rax
 pop rax
 sub rax, rbx
-mov [rbp - 16], rax
-mov rax, [rbp - 16]
 push rax
 pop rdi
 call add

@@ -10,10 +10,12 @@ NUMBER: /[1-9][0-9]*/|"0"
 OPBIN: /[+\-]/
 liste_var:                            -> vide
     | IDENTIFIER ("," IDENTIFIER)*    -> vars
+liste_expression:                            -> vide
+    | expression ("," expression)* -> exprs
 expression: IDENTIFIER            -> var
     | expression OPBIN expression -> opbin
     | NUMBER                      -> number
-    | IDENTIFIER "(" liste_var ")" -> call_function_expr
+    | IDENTIFIER "(" liste_expression ")" -> call_function_expr
 commande: commande (";" commande)*   -> sequence
     | "while" "(" expression ")" "{" commande "}" -> while
     | IDENTIFIER "=" expression              -> affectation
@@ -21,7 +23,7 @@ commande: commande (";" commande)*   -> sequence
     | "printf" "(" expression ")"                -> print
     | "skip"                                  -> skip
     | "return" "(" expression ")"           -> return
-    | IDENTIFIER "(" liste_var ")" -> call_function_cmd
+    | IDENTIFIER "(" liste_expression ")" -> call_function_cmd
 function: "funct" IDENTIFIER "(" liste_var ")" "{" liste_var commande "}"
 program: liste_var function (liste_var function)*
     
@@ -89,18 +91,17 @@ def asm_expression(e,nom_funct):
         if funct_to_call not in defi["func"]:
             raise NameError(f"Fonction non définie : '{funct_to_call}'")
         
-        liste_args = e.children[1].children
+        liste_exprs = e.children[1].children
 
         #Vérifie que l'on appelle bien la fonction avec le bon nombre d'arguments
-        if len(liste_args) != len(defi["func"][funct_to_call]["arg"]):
-            raise TypeError(f"La fonction '{funct_to_call}' attend {len(defi["func"][funct_to_call]["arg"])} arguments, mais {len(liste_args)} ont été fournis.")
+        if len(liste_exprs) != len(defi["func"][funct_to_call]["arg"]):
+            raise TypeError(f"La fonction '{funct_to_call}' attend {len(defi["func"][funct_to_call]["arg"])} arguments, mais {len(liste_exprs)} ont été fournis.")
         
         #Utilisation d'une pile => On traite les éléments dans le sens inverse
-        for var in reversed(liste_args):
-            var_tree = Tree("var", [var])
-            output += asm_expression(var_tree,nom_funct) + "\n"
+        for expr in reversed(liste_exprs):
+            output += asm_expression(expr,nom_funct) + "\n"
             output += "push rax\n"
-        for i in range(len(liste_args)):
+        for i in range(len(liste_exprs)):
             output += f"pop {registres_input[i]}\n"
         output += f"call {funct_to_call}\n"
         return output
@@ -226,17 +227,16 @@ else{idx}: nop
         if funct_to_call not in defi["func"]:
             raise NameError(f"Fonction non définie : '{funct_to_call}'")
         
-        liste_args = c.children[1].children
+        liste_exprs = c.children[1].children
 
         #Vérifie que l'on appelle bien la fonction avec le bon nombre d'arguments
-        if len(liste_args) != len(defi["func"][funct_to_call]["arg"]):
-            raise TypeError(f"La fonction {funct_to_call} attend {len(defi["func"][funct_to_call]["arg"])} arguments, mais {len(liste_args)} ont été fournis.")
+        if len(liste_exprs) != len(defi["func"][funct_to_call]["arg"]):
+            raise TypeError(f"La fonction {funct_to_call} attend {len(defi["func"][funct_to_call]["arg"])} arguments, mais {len(liste_exprs)} ont été fournis.")
         
-        for var in reversed(liste_args):
-            var_tree = Tree("var", [var])
-            output += asm_expression(var_tree, nom_funct) + "\n"
+        for expr in reversed(liste_exprs):
+            output += asm_expression(expr, nom_funct) + "\n"
             output += "push rax\n"
-        for i in range(len(liste_args)):
+        for i in range(len(liste_exprs)):
             output += f"pop {registres_input[i]}\n"
         output += f"call {funct_to_call}\n"
         return output
