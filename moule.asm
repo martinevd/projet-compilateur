@@ -12,6 +12,7 @@ section .text
 main:
 push rbp
 mov [argv], rsi
+mov rbp, rsp
 
 INIT_VARS
 COMMANDE

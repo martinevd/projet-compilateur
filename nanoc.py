@@ -11,7 +11,7 @@ last_stack_variable = 0
 g = Lark(
     """
 IDENTIFIER: /[a-zA-Z_][a-zA-Z0-9]*/
-TYPE: "int"|"double"|"char"|"bool"
+TYPE: "int"|"double"|"char"|"bool"|"long"
 NUMBER: /[1-9][0-9]*/|"0"
 OPBIN: /[+\-*\/>]/
 liste_var:                            -> vide
@@ -44,12 +44,16 @@ def get_vars_commande(c):
 
 op2asm = {"+": "add rax, rbx", "-": "sub rax, rbx"}
 variables_adresses = {}
-var_size = {"int": 4, "double": 4, "char": 4, "bool": 4}
+var_size = {"int": 4, "double": 8, "char": 8, "bool": 8, "long": 8}
+register = {"1": "al", "2": "ax", "4": "eax", "8": "rax"}
 
 
 def asm_expression(e):
     if e.data == "var":
-        return f"mov rax, [rbp{variables_adresses[e.children[0]][0]}]"
+        needed_bytes = str(variables_adresses[e.children[0]][1])
+        return (
+            f"mov {register[needed_bytes]}, [rbp{variables_adresses[e.children[0]][0]}]"
+        )
     if e.data == "number":
         return f"mov rax, {e.children[0]}"
     e_left = e.children[0]
@@ -66,7 +70,7 @@ pop rax
 
 
 def transfo_int_number(s):
-    if s == "int" or s == "double":
+    if s == "int" or s == "double" or s == "long":
         return "NUMBER"
     return s
 
@@ -79,8 +83,11 @@ def type_of_expression(e):
     if e.data == "opbin":
         e_left = e.children[0]
         e_right = e.children[2]
+        # Pourquoi ?
         type_left_exp = transfo_int_number(type_of_expression(e_left))
         type_right_exp = transfo_int_number(type_of_expression(e_right))
+        # print(type_of_expression(e_left), type_of_expression(e_right))
+        # print(e_left, e_right)
         if type_left_exp != type_right_exp:
             raise TypeError(
                 f"Expression of the left {e_left} is not the same type as the one on the right {e_right}"
@@ -98,10 +105,11 @@ def asm_commande(c):
         size = var_size[type_var]
         last_stack_variable -= size
         variables_adresses[var] = (last_stack_variable, size, type_var.value)
+        needed_bytes = str(register[str(size)])
         return f"""
 sub rsp, {size}
 {asm_expression(exp)}
-mov [rbp{last_stack_variable}], rax
+mov [rbp{last_stack_variable}], {needed_bytes}
 """
     if c.data == "affectation":
         var = c.children[0]
@@ -112,9 +120,11 @@ mov [rbp{last_stack_variable}], rax
         if type_of_expression(exp) != variables_adresses[var][2]:
             raise TypeError(f"Expression {exp} is not the same type as {var}")
 
+        needed_bytes = str(register[str(variables_adresses[var.value][1])])
+
         return f"""
 {asm_expression(exp)}
-mov [rbp{variables_adresses[var.value][0]}], rax
+mov [rbp{variables_adresses[var.value][0]}], {needed_bytes}
 """
 
     if c.data == "skip":
@@ -131,7 +141,8 @@ call printf
         body = c.children[1]
         idx = cpt
         cpt += 1
-        return f"""loop{idx}: {asm_expression(exp)}
+        return f"""
+loop{idx}: {asm_expression(exp)}
 cmp rax, 0
 jz end{idx}
 {asm_commande(body)}
