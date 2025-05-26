@@ -61,7 +61,6 @@ def asm_expression(e):
     e_right = e.children[2]
     asm_left = asm_expression(e_left)
     asm_right = asm_expression(e_right)
-    print(variables_adresses)
     return f"""{asm_left}
 push rax
 {asm_right}

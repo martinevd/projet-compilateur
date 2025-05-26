@@ -36,6 +36,11 @@ mov rax, 1
 mov [rbp-24], rax
 
  
+sub rsp, 8
+mov rax, [rbp-32]
+mov [rbp-32], rax
+
+ 
 loop0: mov eax, [rbp-4]
 cmp rax, 0
 jz end0
@@ -69,13 +74,13 @@ mov [rbp-24], rax
 jmp loop0
 end0: nop
 
-mov rax, [rbp-24]
+mov rax, [rbp-32]
 mov rdi, fmt_int
 mov rsi, rax
 xor rax, rax
 call printf
 
-add rsp, 24
+add rsp, 32
 pop rbp
 ret
 
