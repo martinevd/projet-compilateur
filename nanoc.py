@@ -61,18 +61,13 @@ def asm_expression(e):
     e_right = e.children[2]
     asm_left = asm_expression(e_left)
     asm_right = asm_expression(e_right)
+    print(variables_adresses)
     return f"""{asm_left}
 push rax
 {asm_right}
 mov rbx, rax
 pop rax
 {op2asm[e_op.value]}"""
-
-
-def transfo_int_number(s):
-    if s == "int" or s == "double" or s == "long":
-        return "NUMBER"
-    return s
 
 
 def type_of_expression(e):
