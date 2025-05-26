@@ -83,11 +83,8 @@ def type_of_expression(e):
     if e.data == "opbin":
         e_left = e.children[0]
         e_right = e.children[2]
-        # Pourquoi ?
-        type_left_exp = transfo_int_number(type_of_expression(e_left))
-        type_right_exp = transfo_int_number(type_of_expression(e_right))
-        # print(type_of_expression(e_left), type_of_expression(e_right))
-        # print(e_left, e_right)
+        type_left_exp = type_of_expression(e_left)
+        type_right_exp = type_of_expression(e_right)
         if type_left_exp != type_right_exp:
             raise TypeError(
                 f"Expression of the left {e_left} is not the same type as the one on the right {e_right}"
