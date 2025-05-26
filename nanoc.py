@@ -1,4 +1,4 @@
-from lark import Lark, Tree
+from lark import Lark
 
 # ══════════════════════════════
 # GRAMMAIRE
@@ -391,11 +391,10 @@ def pp_expression(e):
     #Appel de fonction avec retour
     if e.data == "call_function_expr":
         name = e.children[0]
-        liste_vars = ""
-        for var in e.children[1].children:
-            liste_vars += var + ","
-        if len(liste_vars) > 0 : liste_vars = liste_vars[:-1]
-        return f"{name}({liste_vars})"
+        liste_exprs = ""
+        for expr in e.children[1].children:
+            liste_exprs += expr + ","
+        return f"{name}({liste_exprs[:-1]})"
     
     #Opération binaire
     if e.data == "opbin":
@@ -436,6 +435,21 @@ def pp_commande(c):
         body = c.children[1]
         return f"while ( {pp_expression(exp)} ) {{{pp_commande(body)}}}"
     
+    # If et Else
+    if c.data == "ite":
+        exp = c.children[0]
+        body_if = c.children[1]
+        output = f"""if ({pp_expression(exp)}) {{
+        {pp_commande(body_if)}
+    }}"""
+        if len(c.children) > 2:
+            body_else = c.children[2]
+            output += f""" else {{
+        {pp_commande(body_else)}
+    }}"""
+        return output
+
+    
     #Séquence de commandes
     if c.data == "sequence":
         d = c.children[0]
@@ -450,11 +464,10 @@ def pp_commande(c):
     #Appel de fonction sans retour
     if c.data == "call_function_cmd":
         name = c.children[0]
-        liste_vars = ""
-        for var in c.children[1].children:
-            liste_vars += var + ","
-        if len(liste_vars) > 0 : liste_vars = liste_vars[:-1]
-        return f"{name}({liste_vars})"
+        liste_exprs = ""
+        for expr in c.children[1].children:
+            liste_exprs += pp_expression(expr) + ","
+        return f"{name}({liste_exprs[:-1]})"
     
     #Erreur si c n'est pas une expression valide
     raise ValueError(f"Type de commande non pris en charge : {c.data}") 
@@ -470,12 +483,17 @@ def pp_function(f):
         str: La représentation textuelle lisible de la fonction.
     """
     name = f.children[0]
-    liste_vars = ""
+    liste_args = ""
+    for arg in f.children[1].children:
+        liste_args += arg + ","
+    liste_args = liste_args[:-1]
+    liste_locs = ""
     for var in f.children[1].children:
-        liste_vars += var + ","
-    liste_vars = liste_vars[:-1]
-    c2 = f.children[2]
-    return f"""funct {name} ({liste_vars}){{
+        liste_locs += var + ","
+    liste_locs = liste_locs[:-1]
+    c2 = f.children[3]
+    return f"""funct {name} ({liste_args}){{
+    {liste_locs}
     {pp_commande(c2)}
 }}"""
 
