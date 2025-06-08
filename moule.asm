@@ -9,6 +9,7 @@ global main
 section .text
 
 main:
+
     push rbp
     mov rbp, rsp
 
@@ -28,4 +29,16 @@ main:
     ret
 
 COMMANDE
+
+
+
+;RETOUR
+;mov rdi, fmt_int
+;mov rsi, rax
+;xor rax, rax
+;call printf
+
+;VIDE_MEMOIRE
+;pop rbp
+;ret
 

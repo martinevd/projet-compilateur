@@ -7,6 +7,7 @@ from context import VariableContext,FunctionContext,GlobalContext
 
 g = Lark(r"""
 IDENTIFIER: /[a-zA-Z_][a-zA-Z0-9]*/
+TYPE: "int"|"double"|"char"|"bool"|"long"
 NUMBER: /[1-9][0-9]*/|"0" 
 OPBIN: /[+\-]/
 liste_var:                            -> vide
@@ -20,6 +21,7 @@ expression: IDENTIFIER            -> var
 commande: commande (";" commande)*   -> sequence
     | "while" "(" expression ")" "{" commande "}" -> while
     | IDENTIFIER "=" expression              -> affectation
+    | TYPE IDENTIFIER "=" expression -> declaration
     |"if" "(" expression ")" "{" commande "}" ("else" "{" commande "}")? -> ite
     | "printf" "(" expression ")"                -> print
     | "skip"                                  -> skip
@@ -27,7 +29,6 @@ commande: commande (";" commande)*   -> sequence
     | IDENTIFIER "(" liste_expression ")" -> call_function_cmd
 function: "funct" IDENTIFIER "(" liste_var ")" "{" liste_var commande "}"
 program: liste_var function (liste_var function)*
-    
 %import common.WS
 %ignore WS
 """, start='program')
@@ -42,6 +43,12 @@ cpt = 0
 
 #Association entre opérateurs et code assembleur
 op2asm = {'+' : 'add rax, rbx', '-': 'sub rax, rbx'}
+
+#Tailles de chaque variables
+var_size = {"int": 4, "double": 8, "char": 8, "bool": 8, "long": 8}
+
+#Association taille octet au registre adapte
+register = {1: "al", 2: "ax", 4: "eax", 8: "rax"}
 
 #Registres utilisés par convention pour les inputs d'une fonction
 registres_input = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
@@ -66,15 +73,13 @@ def asm_expression(e,name_fct):
     """
 
     #Variable
-    if e.data == "var": 
-        nom_var = e.children[0]
-
-        var_ctx = global_ctx.get_variable(nom_var,name_fct)
+    if e.data == "var":
+        var_ctx = global_ctx.get_variable(e.children[0],name_fct)
+        needed_bytes = var_size[var_ctx.var_type]
         #Vérifie si la variable existe bien d'abord en local puis en global
         if var_ctx.offset :
-            return f"mov rax, [rbp - {var_ctx.offset}]"
-        return f"mov rax, [{nom_var}]"
-        
+            return f"mov {register[needed_bytes]}, [rbp - {var_ctx.offset}]"
+        return f"mov {register[needed_bytes]}, [{var_ctx.name}]
     
     #Nombre
     if e.data == "number": 
@@ -111,16 +116,33 @@ def asm_expression(e,name_fct):
         e_right = e.children[2]
         asm_left = asm_expression(e_left,name_fct)
         asm_right = asm_expression(e_right,name_fct)
-        return f"""{asm_left} 
+        return f"""{asm_left}
 push rax
 {asm_right}
 mov rbx, rax
 pop rax
 {op2asm[e_op.value]}"""
-    
+
     #Erreur si e n'est pas une expression valide
     raise ValueError(f"Type d'expression non pris en charge : {e.data}") 
-
+    
+def type_of_expression(e,name_fct):
+    if e.data == "number":
+        return "int"
+    if e.data == "var":
+        var_ctx = global_ctx.get_variable(e.children[0],name_fct)
+        return var_ctx.var_type
+    if e.data == "opbin":
+        e_left = e.children[0]
+        e_right = e.children[2]
+        type_left_exp = type_of_expression(e_left)
+        type_right_exp = type_of_expression(e_right)
+        if type_left_exp != type_right_exp:
+            raise TypeError(
+                f"Expression of the left {e_left} is not the same type as the one on the right {e_right}"
+            )
+        return type_of_expression(e_left)
+      
 def asm_commande(c,name_fct):
     """
     Génère le code assembleur d'une commande à partir de son arbre syntaxique.
@@ -132,14 +154,44 @@ def asm_commande(c,name_fct):
         name_fct (str): Le nom de la fonction en cours de compilation, utilisé pour 
                          accéder à son contexte local (arguments, variables locales) 
                          dans la structure de définition du programme.
-
     Returns:
         str: Le code assembleur correspondant à la commande.
     """
 
     #Utiliser le compteur global
     global cpt
+    
+    """
+    if c.data == "declaration":
+        var_type = c.children[0]
+        var_name = c.children[1]
+        exp = c.children[2]
+        size = var_size[type_var]
+        last_stack_variable -= size
+        variables_adresses[var] = (last_stack_variable, size, type_var.value)
+        needed_bytes = str(register[str(size)])
+        return f"""
+sub rsp, {size}
+{asm_expression(exp)}
+mov [rbp{last_stack_variable}], {needed_bytes}
+"""
 
+    if c.data == "affectation":
+          var = c.children[0]
+          exp = c.children[1]
+          # Check for declaration before affectation
+          if var not in variables_adresses:
+              raise Exception(f"Undefined variable {var}")
+          if type_of_expression(exp) != variables_adresses[var][2]:
+              raise TypeError(f"Expression {exp} is not the same type as {var}")
+
+          needed_bytes = str(register[str(variables_adresses[var.value][1])])
+
+          return f"""
+  {asm_expression(exp)}
+  mov [rbp{variables_adresses[var.value][0]}], {needed_bytes}
+  """
+"""
     #Affectation
     if c.data == "affectation": 
         name_var = c.children[0]
@@ -304,7 +356,7 @@ def asm_program(p):
     #Moule du programme
     with open("moule.asm") as f:
         prog_asm = f.read()
-
+        
     #Code assembleur de déclaration des variables globales
     decl_vars = ""
 
@@ -331,6 +383,12 @@ mov [{var}], rax
 """
     prog_asm = prog_asm.replace("INIT_VARS", init_vars)
     prog_asm = prog_asm.replace("DECL_VARS", decl_vars)
+
+    """
+    prog_asm = prog_asm.replace("COMMANDE", asm_c)
+    prog_asm = prog_asm.replace("VIDE_MEMOIRE", f"add rsp, {-last_stack_variable}")
+    return prog_asm
+    """
 
     #Définition des fonctions
     for i in range(1, len(p.children), 2):
@@ -411,7 +469,14 @@ def pp_commande(c):
     Returns:
         str: La représentation textuelle lisible de la commande.
     """
-
+    
+    """
+    if c.data == "declaration":
+        type_var = c.children[0]
+        var = c.children[1]
+        exp = c.children[2]
+        return f"{type_var} {var.value} = {pp_expression(exp)}"
+     """
     #Affectation
     if c.data == "affectation": 
         var = c.children[0]
@@ -522,6 +587,5 @@ if __name__ == "__main__":
 
     #Arbre syntaxique du programme
     ast = g.parse(src)
-
     #Affichage du code assembleur du programme
     print(asm_program(ast))
