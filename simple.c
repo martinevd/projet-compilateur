@@ -1,15 +1,23 @@
-main(){
-	int X = 10;
-	int Y = 0;
-	long Z = 1;
-	long A = 1;
-	char c = c;
-	while (X){
-		X = X - 1;
-		Y = Y + 1;
-		A = A + Z
-	}
-	return(c)
 
+funct add(b){
+    c
+
+    c = b;
+    if (c){
+        add1(b)
+    }
+    
 }
 
+funct add1(b){
+    
+    X = X + 1;
+    add(b - 1)
+}
+
+X, Y
+
+funct main(){
+    add(Y);
+    return(X)
+}
