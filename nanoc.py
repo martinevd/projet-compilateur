@@ -5,13 +5,15 @@ from context import VariableContext,FunctionContext,GlobalContext
 # GRAMMAIRE
 # ══════════════════════════════
 
+#HERE
 g = Lark(r"""
 IDENTIFIER: /[a-zA-Z_][a-zA-Z0-9]*/
 TYPE: "int"|"double"|"char"|"bool"|"long"
 NUMBER: /[1-9][0-9]*/|"0" 
 OPBIN: /[+\-]/
-liste_var:                            -> vide
-    | IDENTIFIER ("," IDENTIFIER)*    -> vars
+decl_var : TYPE IDENTIFIER
+liste_decl_var:                            -> vide
+    |  decl_var ("," decl_var)*    -> vars
 liste_expression:                            -> vide
     | expression ("," expression)* -> exprs
 expression: IDENTIFIER            -> var
@@ -21,18 +23,17 @@ expression: IDENTIFIER            -> var
 commande: commande (";" commande)*   -> sequence
     | "while" "(" expression ")" "{" commande "}" -> while
     | IDENTIFIER "=" expression              -> affectation
-    | TYPE IDENTIFIER "=" expression -> declaration
+    | TYPE IDENTIFIER ("=" expression)? -> declaration
     |"if" "(" expression ")" "{" commande "}" ("else" "{" commande "}")? -> ite
     | "printf" "(" expression ")"                -> print
     | "skip"                                  -> skip
     | "return" "(" expression ")"           -> return
     | IDENTIFIER "(" liste_expression ")" -> call_function_cmd
-function: "funct" IDENTIFIER "(" liste_var ")" "{" liste_var commande "}"
-program: liste_var function (liste_var function)*
+function: ("void"|TYPE) IDENTIFIER "(" liste_decl_var ")" "{" commande "}"
+program: liste_decl_var function (liste_decl_var function)*
 %import common.WS
 %ignore WS
 """, start='program')
-
 
 # ══════════════════════════════
 # ASSEMBLEUR
@@ -43,12 +44,6 @@ cpt = 0
 
 #Association entre opérateurs et code assembleur
 op2asm = {'+' : 'add rax, rbx', '-': 'sub rax, rbx'}
-
-#Tailles de chaque variables
-var_size = {"int": 4, "double": 8, "char": 8, "bool": 8, "long": 8}
-
-#Association taille octet au registre adapte
-register = {1: "al", 2: "ax", 4: "eax", 8: "rax"}
 
 #Registres utilisés par convention pour les inputs d'une fonction
 registres_input = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
@@ -75,39 +70,43 @@ def asm_expression(e,name_fct):
     #Variable
     if e.data == "var":
         var_ctx = global_ctx.get_variable(e.children[0],name_fct)
-        needed_bytes = var_size[var_ctx.var_type]
         #Vérifie si la variable existe bien d'abord en local puis en global
         if var_ctx.offset :
-            return f"mov {register[needed_bytes]}, [rbp - {var_ctx.offset}]"
-        return f"mov {register[needed_bytes]}, [{var_ctx.name}]
+            return f"mov rax, [rbp - {var_ctx.offset}]"
+        return f"mov rax, [{var_ctx.name}]"
     
     #Nombre
-    if e.data == "number": 
+    if e.data == "number":
         return f"mov rax, {e.children[0].value}"
     
-    #Appel de fonction avec retour
+    # Appel de fonction avec retour
     if e.data == "call_function_expr":
         output = ""
         fct_to_call = e.children[0].value
 
-        #Vérifie que la fonction est bien definie
+        # Vérifie que la fonction est bien définie
         if not global_ctx.has_function(fct_to_call):
             raise NameError(f"Fonction non définie : '{fct_to_call}'")
         
         liste_exprs = e.children[1].children
-
-        #Vérifie que l'on appelle bien la fonction avec le bon nombre d'arguments
+        fct_ctx = global_ctx.get_function(fct_to_call)
+        
         if len(liste_exprs) != global_ctx.nb_args(fct_to_call):
             raise TypeError(f"La fonction '{fct_to_call}' attend {global_ctx.nb_args(fct_to_call)} arguments, mais {len(liste_exprs)} ont été fournis.")
         
-        #Utilisation d'une pile => On traite les éléments dans le sens inverse
+        # Push les arguments (en inversé pour pile)
         for expr in reversed(liste_exprs):
-            output += asm_expression(expr,name_fct) + "\n"
+            output += asm_expression(expr, name_fct) + "\n"
             output += "push rax\n"
-        for i in range(len(liste_exprs)):
+
+        arg_names = list(fct_ctx.args.keys())
+        # Pop dans les bons registres en fonction du type
+        for i, expr in enumerate(liste_exprs):
             output += f"pop {registres_input[i]}\n"
+
         output += f"call {fct_to_call}\n"
         return output
+
     
     #Opération binaire
     if e.data == "opbin":
@@ -135,13 +134,16 @@ def type_of_expression(e,name_fct):
     if e.data == "opbin":
         e_left = e.children[0]
         e_right = e.children[2]
-        type_left_exp = type_of_expression(e_left)
-        type_right_exp = type_of_expression(e_right)
+        type_left_exp = type_of_expression(e_left,name_fct)
+        type_right_exp = type_of_expression(e_right,name_fct)
         if type_left_exp != type_right_exp:
             raise TypeError(
                 f"Expression of the left {e_left} is not the same type as the one on the right {e_right}"
             )
-        return type_of_expression(e_left)
+        return type_of_expression(e_left,name_fct)
+    if e.data == "call_function_expr":
+        fct_to_call = global_ctx.get_function(e.children[0].value)
+        return fct_to_call.return_type
       
 def asm_commande(c,name_fct):
     """
@@ -161,47 +163,43 @@ def asm_commande(c,name_fct):
     #Utiliser le compteur global
     global cpt
     
-    """
+
+    #Declaration
     if c.data == "declaration":
-        var_type = c.children[0]
-        var_name = c.children[1]
-        exp = c.children[2]
-        size = var_size[type_var]
-        last_stack_variable -= size
-        variables_adresses[var] = (last_stack_variable, size, type_var.value)
-        needed_bytes = str(register[str(size)])
-        return f"""
-sub rsp, {size}
+
+        fct_ctx = global_ctx.get_function(name_fct)
+
+        var_name = c.children[1].value
+        var_type = c.children[0].value
+        offset = fct_ctx.last_offset + 8
+
+        fct_ctx.add_local(VariableContext(var_name,var_type,offset,name_fct))
+        fct_ctx.last_offset += 8
+
+        if (len(c.children) > 2):
+            exp = c.children[2]
+            return f"""sub rsp, 8
 {asm_expression(exp)}
-mov [rbp{last_stack_variable}], {needed_bytes}
+mov [rbp - {offset}], rax
 """
+        return f"sub rsp, 8"
 
-    if c.data == "affectation":
-          var = c.children[0]
-          exp = c.children[1]
-          # Check for declaration before affectation
-          if var not in variables_adresses:
-              raise Exception(f"Undefined variable {var}")
-          if type_of_expression(exp) != variables_adresses[var][2]:
-              raise TypeError(f"Expression {exp} is not the same type as {var}")
-
-          needed_bytes = str(register[str(variables_adresses[var.value][1])])
-
-          return f"""
-  {asm_expression(exp)}
-  mov [rbp{variables_adresses[var.value][0]}], {needed_bytes}
-  """
-"""
     #Affectation
-    if c.data == "affectation": 
-        name_var = c.children[0]
+    if c.data == "affectation":
+        name_var = c.children[0].value
         exp = c.children[1]
+          
+        var_ctx = global_ctx.get_variable(name_var,name_fct)      
 
-        var_ctx = global_ctx.get_variable(name_var,name_fct)
+        if type_of_expression(exp,name_fct) != var_ctx.var_type:
+            raise TypeError(f"Expression {exp} is not the same type as {name_var}")
+
         #Vérifie si la variable existe bien d'abord en local puis en global
         if var_ctx.offset:
-            return f"{asm_expression(exp,name_fct)}\nmov [rbp - {var_ctx.offset}], rax"
-        return f"{asm_expression(exp,name_fct)}\nmov [{name_var}], rax"
+            return f"""{asm_expression(exp,name_fct)}
+mov [rbp - {var_ctx.offset}], rax"""
+        return f"""{asm_expression(exp,name_fct)}
+mov [{name_var}], rax"""
     
     #Skip
     if c.data == "skip": return "nop"
@@ -235,6 +233,7 @@ end{idx}: nop
         body_if = c.children[1] 
         idx = cpt
         cpt += 1
+
         output = f"""if{idx}:{asm_expression(exp,name_fct)}
 cmp rax, 0
 jz else{idx}
@@ -260,32 +259,45 @@ else{idx}: nop
     #Retour de fonction (besoin du label de la fonction pour retourner 
     #au bon endroit du code)
     if c.data == "return": 
-        return f"""{asm_expression(c.children[0], name_fct)}
+        exp = c.children[0]
+        type_exp = type_of_expression(exp,name_fct)
+        fct_ctx = global_ctx.get_function(name_fct)
+        
+        if (type_exp != fct_ctx.return_type):
+            raise TypeError(
+            f"La fonction '{name_fct}' doit retourner un(e)'{fct_ctx.return_type}', "
+            f"mais retourne un(e)'{type_exp}'"
+        ) 
+
+        return f"""{asm_expression(exp, name_fct)}
     jmp end_{name_fct}
     """
 
-    #Appel de fonction sans retour
+    # Appel de fonction sans retour
     if c.data == "call_function_cmd":
         output = ""
         fct_to_call = c.children[0].value
 
-        #Vérifie que la fonction est bien definie
         if not global_ctx.has_function(fct_to_call):
             raise NameError(f"Fonction non définie : '{fct_to_call}'")
         
         liste_exprs = c.children[1].children
+        fct_ctx = global_ctx.get_function(fct_to_call)
 
-        #Vérifie que l'on appelle bien la fonction avec le bon nombre d'arguments
         if len(liste_exprs) != global_ctx.nb_args(fct_to_call):
             raise TypeError(f"La fonction {fct_to_call} attend {global_ctx.nb_args(fct_to_call)} arguments, mais {len(liste_exprs)} ont été fournis.")
         
         for expr in reversed(liste_exprs):
             output += asm_expression(expr, name_fct) + "\n"
             output += "push rax\n"
-        for i in range(len(liste_exprs)):
+
+        arg_names = list(fct_ctx.args.keys())
+        for i, expr in enumerate(liste_exprs):
             output += f"pop {registres_input[i]}\n"
+
         output += f"call {fct_to_call}\n"
         return output
+
 
     #Erreur si c n'est pas une commande valide
     raise ValueError(f"Type de commande non pris en charge : {c.data}") 
@@ -301,10 +313,13 @@ def asm_function(fct):
         str: Le code assembleur correspondant à la fonction.
     """
 
-    name_fct = fct.children[0].value
-    liste_vars_arg = fct.children[1].children
-    liste_vars_loc = fct.children[2].children
-    commande = fct.children[3]
+    has_type = len(fct.children) == 4
+
+    type_offset = 1 if has_type else 0
+
+    name_fct = fct.children[type_offset].value
+    liste_vars_arg = fct.children[type_offset + 1].children
+    commande = fct.children[type_offset + 2]
 
     output = f"{name_fct}:\n"
 
@@ -312,23 +327,15 @@ def asm_function(fct):
     output += f"""push rbp
     mov rbp, rsp
     """
-    taille_stack = 8 * (len(liste_vars_arg) + len(liste_vars_loc))
-    if taille_stack > 0:
-        output += f"sub rsp, {taille_stack}\n"
-
-    i = 0
     #Sauvegarde des arguments
-    for var in liste_vars_arg:
-        offset = (i+1)*8
-        global_ctx.set_offset_arg(var.value,name_fct,offset)
-        output += f"mov [rbp - {offset}], {registres_input[i]}\n"
-        i += 1
+    for i,decl_var in enumerate(liste_vars_arg):
+        type_var = decl_var.children[0].value
+        name_var = decl_var.children[1].value
 
-    #Sauvegarde des variables locales
-    for var in liste_vars_loc:
-        offset = (i+1)*8
-        global_ctx.set_offset_local(var.value,name_fct,offset)
-        i += 1
+        var_ctx = global_ctx.get_variable(name_var,name_fct)
+        output += f"""sub rsp, 8
+mov [rbp - {var_ctx.offset}], {registres_input[i]}
+"""
 
     #Exécution les commandes
     output += f"{asm_commande(commande,name_fct)}\n"
@@ -369,49 +376,51 @@ def asm_program(p):
     #Recherche des variables globales
     for i in range(0, len(p.children), 2):
         vars = p.children[i]
-        for var in vars.children:
+        for decl_var in vars.children:
+            type_var = decl_var.children[0].value
+            name_var = decl_var.children[1].value
+
             #Ajout des variables globales dans la liste des définitions du programme
-            global_ctx.add_global(VariableContext(var.value,"int"))
+            global_ctx.add_global(VariableContext(name_var,type_var))
 
     #Déclaration et initialisation des variables globales
     for i,var in enumerate(global_ctx.globals):
         decl_vars += f"{var}: dq 0\n"
         init_vars += f"""mov rbx, [argv]
-mov rdi, [rbx + {(i+1)*8}]
+mov rdi, [rbx + {8 * (i + 1)}]
 call atoi
 mov [{var}], rax
 """
     prog_asm = prog_asm.replace("INIT_VARS", init_vars)
     prog_asm = prog_asm.replace("DECL_VARS", decl_vars)
 
-    """
-    prog_asm = prog_asm.replace("COMMANDE", asm_c)
-    prog_asm = prog_asm.replace("VIDE_MEMOIRE", f"add rsp, {-last_stack_variable}")
-    return prog_asm
-    """
-
     #Définition des fonctions
     for i in range(1, len(p.children), 2):
         fct = p.children[i]
 
-        #Cas particulier pour la fonction main : on l'écrit au début pour commencer
-        #par cette dernière
-        if fct.children[0].value == "main":
-            fct.children[0].value = "main_function"
-            prog_asm = prog_asm.replace("CALL_MAIN", "call main_function")
+        has_type = len(fct.children) == 4
+        type_offset = 1 if has_type else 0
 
-        name_fct = fct.children[0].value
+        return_type = fct.children[0].value if has_type else "void"
+        name_fct = fct.children[type_offset].value
+        liste_vars_arg = fct.children[type_offset + 1].children
+
+        #Cas particulier pour la fonction exec : on l'écrit au début pour commencer
+        #par cette dernière
+        if name_fct == "exec":
+            prog_asm = prog_asm.replace("CALL_EXEC", "call exec")
 
         #Pour faire en sorte que l'ordre d'implémentation de fonctions n'est pas 
         #d'importance
-        liste_args = fct.children[1].children
-        liste_locals = fct.children[2].children
 
-        fct_ctx = FunctionContext(name_fct)
-        for arg in liste_args :
-            fct_ctx.add_arg(VariableContext(arg.value,"int"))
-        for local in liste_locals :
-            fct_ctx.add_local(VariableContext(local.value,"int"))
+        fct_ctx = FunctionContext(name_fct,return_type)
+        for decl_arg in liste_vars_arg :
+            type_arg = decl_arg.children[0].value
+            name_arg = decl_arg.children[1].value
+
+            offset = fct_ctx.last_offset + 8
+            
+            fct_ctx.add_arg(VariableContext(name_arg,type_arg,offset))
         global_ctx.add_function(fct_ctx)
 
     #Compilation des fonctions
@@ -425,7 +434,6 @@ mov [{var}], rax
 # ══════════════════════════════
 # AFFICHAGE
 # ══════════════════════════════
-
 
 def pp_expression(e):
     """
@@ -470,13 +478,14 @@ def pp_commande(c):
         str: La représentation textuelle lisible de la commande.
     """
     
-    """
     if c.data == "declaration":
         type_var = c.children[0]
         var = c.children[1]
-        exp = c.children[2]
-        return f"{type_var} {var.value} = {pp_expression(exp)}"
-     """
+        if (len(c.children) > 2):
+            exp = c.children[2]
+            return f"{type_var} {var.value} = {pp_expression(exp)}"
+        return f"{type_var} {var.value}"
+    
     #Affectation
     if c.data == "affectation": 
         var = c.children[0]
@@ -542,21 +551,25 @@ def pp_function(f):
     Returns:
         str: La représentation textuelle lisible de la fonction.
     """
-    name = f.children[0]
+    has_type = len(f.children) == 4
+
+    type_offset = 1 if has_type else 0
+
+    retour_type = f.children[0] if has_type else "void"
+    name_fct = f.children[type_offset].value
+    liste_vars_arg = f.children[type_offset + 1].children
+    commande = f.children[type_offset + 2]
+
     liste_args = ""
-    for arg in f.children[1].children:
-        liste_args += arg + ","
-    liste_args = liste_args[:-1]
-    liste_locs = ""
-    for var in f.children[1].children:
-        liste_locs += var + ","
-    liste_locs = liste_locs[:-1]
-    c2 = f.children[3]
-    return f"""funct {name} ({liste_args}){{
-    {liste_locs}
-    {pp_commande(c2)}
+    for arg in liste_vars_arg:
+        type_arg = arg.children[0].value
+        name_arg = arg.children[1].value
+        liste_args += type_arg + " " + name_arg + ","
+    return f"""{retour_type} {name_fct} ({liste_args[:-1]}){{
+    {pp_commande(commande)}
 }}"""
 
+#HERE
 def pp_program(p):
     """
     Génère une représentation lisible (pretty-print) du programme à partir de son arbre syntaxique.
@@ -573,9 +586,10 @@ def pp_program(p):
         fct = p.children[i+1]
         liste_vars =""
         for var in vars.children:
-            liste_vars += var + ", "
-        liste_vars = liste_vars[:-2]
-        output += f"{liste_vars}\n{pp_function(fct)}\n"
+            type_var = var.children[0].value
+            name_var = var.children[1].value
+            liste_vars += type_var + " " + name_var + ", " 
+        output += f"{liste_vars[:-2]}\n{pp_function(fct)}\n"
     return output
 
 

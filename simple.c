@@ -1,23 +1,18 @@
 
-funct add(b){
-    c
-
-    c = b;
-    if (c){
-        add1(b)
+void add(int b){
+    while(b){
+        add1();
+        b = b - 1
     }
-    
 }
 
-funct add1(b){
-    
-    X = X + 1;
-    add(b - 1)
+void add1(){
+    X = X + 1
 }
 
-X, Y
+int X, int Y
 
-funct main(){
+int exec(){
     add(Y);
-    return(X)
+    return (X)
 }

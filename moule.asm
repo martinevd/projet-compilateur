@@ -9,36 +9,22 @@ global main
 section .text
 
 main:
+push rbp
+mov rbp, rsp
+mov [argv], rsi
 
-    push rbp
-    mov rbp, rsp
+INIT_VARS
 
-    mov [argv], rsi
+CALL_EXEC
 
-    INIT_VARS
+mov rsi, rax
+mov rdi, fmt_int
+xor rax, rax
+call printf
 
-    CALL_MAIN
-
-    mov rsi, rax
-    mov rdi, fmt_int
-    xor rax, rax
-    call printf
-
-    mov rsp, rbp
-    pop rbp
-    ret
+mov rsp, rbp
+pop rbp
+ret
 
 COMMANDE
-
-
-
-;RETOUR
-;mov rdi, fmt_int
-;mov rsi, rax
-;xor rax, rax
-;call printf
-
-;VIDE_MEMOIRE
-;pop rbp
-;ret
 

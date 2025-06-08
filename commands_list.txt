@@ -1,6 +1,0 @@
-source .venv/bin/activate
-
-python3 nanoc.py > simple.nasm
-nasm -f elf64 simple.nasm
-gcc -no-pie simple.o
-./a.out

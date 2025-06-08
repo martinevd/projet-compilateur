@@ -1,5 +1,5 @@
 class VariableContext:
-    def __init__(self, name, var_type, offset=None, function_name=None):
+    def __init__(self, name, var_type, offset=0, function_name=None):
         self.name = name
         self.var_type = var_type
         self.offset = offset
@@ -7,13 +7,16 @@ class VariableContext:
 
 
 class FunctionContext:
-    def __init__(self, name):
+    def __init__(self, name, return_type):
         self.name = name
         self.args = {}
         self.locals = {}
+        self.last_offset = 0
+        self.return_type = return_type
 
     def add_arg(self, var_ctx):
         self.args[var_ctx.name] = var_ctx
+        self.last_offset = var_ctx.offset
 
     def add_local(self, var_ctx):
         self.locals[var_ctx.name] = var_ctx
@@ -45,31 +48,16 @@ class GlobalContext:
             return self.globals[var_name]
 
         raise NameError(f"Variable non définie : '{var_name}'")
-
+    
     def has_function(self, fct_name):
         return fct_name in self.functions
+    
+    def get_function(self,fct_name):
+        if not self.has_function(fct_name):
+            raise NameError(f"Fonction non définie : '{fct_name}'")
+        return self.functions.get(fct_name)
 
     def nb_args(self, fct_name):
-        if fct_name not in self.functions:
+        if not self.has_function(fct_name):
             raise NameError(f"Fonction non définie : '{fct_name}'")
         return len(self.functions[fct_name].args)
-
-    def set_offset_arg(self, var_name, current_func, offset):
-        func_ctx = self.functions.get(current_func)
-        if not func_ctx:
-            raise NameError(f"Fonction non définie : '{current_func}'")
-
-        if var_name in func_ctx.args:
-            func_ctx.args[var_name].offset = offset
-        else:
-            raise NameError(f"Argument non défini : '{var_name}'")
-
-    def set_offset_local(self, var_name, current_func, offset):
-        func_ctx = self.functions.get(current_func)
-        if not func_ctx:
-            raise NameError(f"Fonction non définie : '{current_func}'")
-
-        if var_name in func_ctx.locals:
-            func_ctx.locals[var_name].offset = offset
-        else:
-            raise NameError(f"Variable locale non définie : '{var_name}'")
