@@ -1,18 +1,5 @@
-
-void add(int b){
-    while(b){
-        add1();
-        b = b - 1
+    char exec(){
+        char c = "hello world";
+        printf(c);
+        return (c)
     }
-}
-
-void add1(){
-    X = X + 1
-}
-
-int X, int Y
-
-int exec(){
-    add(Y);
-    return (X)
-}

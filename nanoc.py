@@ -11,6 +11,7 @@ IDENTIFIER: /[a-zA-Z_][a-zA-Z0-9]*/
 TYPE: "int"|"double"|"char"|"bool"|"long"
 NUMBER: /[1-9][0-9]*/|"0" 
 OPBIN: /[+\-]/
+STRING: "\"" /[^\"]*/ "\""
 decl_var : TYPE IDENTIFIER
 liste_decl_var:                            -> vide
     |  decl_var ("," decl_var)*    -> vars
@@ -19,7 +20,9 @@ liste_expression:                            -> vide
 expression: IDENTIFIER            -> var
     | expression OPBIN expression -> opbin
     | NUMBER                      -> number
+    | STRING                      -> string
     | IDENTIFIER "(" liste_expression ")" -> call_function_expr
+    | "len" "(" expression ")"    -> strlen 
 commande: commande (";" commande)*   -> sequence
     | "while" "(" expression ")" "{" commande "}" -> while
     | IDENTIFIER "=" expression              -> affectation
@@ -79,6 +82,19 @@ def asm_expression(e,name_fct):
     if e.data == "number":
         return f"mov rax, {e.children[0].value}"
     
+    #String
+    if e.data == "string":
+        string_value = e.children[0].value.strip('"')
+        label = global_ctx.add_string_literal(string_value)
+        return f"lea rax, [{label}]"
+    
+    #Len(...)
+    if e.data == "strlen":
+        expr = asm_expression(e.children[0], name_fct)
+        return f"""{expr}
+mov rdi, rax
+call _strlen"""
+    
     # Appel de fonction avec retour
     if e.data == "call_function_expr":
         output = ""
@@ -128,6 +144,8 @@ pop rax
 def type_of_expression(e,name_fct):
     if e.data == "number":
         return "int"
+    if e.data == "string":
+        return "char"
     if e.data == "var":
         var_ctx = global_ctx.get_variable(e.children[0],name_fct)
         return var_ctx.var_type
@@ -179,7 +197,7 @@ def asm_commande(c,name_fct):
         if (len(c.children) > 2):
             exp = c.children[2]
             return f"""sub rsp, 8
-{asm_expression(exp)}
+{asm_expression(exp, name_fct)}
 mov [rbp - {offset}], rax
 """
         return f"sub rsp, 8"
@@ -205,9 +223,15 @@ mov [{name_var}], rax"""
     if c.data == "skip": return "nop"
     
     #Print
-    if c.data == "print": return f"""{asm_expression(c.children[0],name_fct)}
+    if c.data == "print": 
+        type_exp = type_of_expression(c.children[0], name_fct)
+        if type_exp == "char":
+            fmt = "fmt_str"
+        else:
+            fmt = "fmt_int"
+        return f"""{asm_expression(c.children[0],name_fct)}
 mov rsi, rax
-mov rdi, fmt_int
+mov rdi, {fmt}
 xor rax, rax
 call printf
 """
@@ -373,6 +397,9 @@ def asm_program(p):
     #Code assembleur des fonctions (interprété comme COMMANDE)
     asm_f = ""
 
+    # Ajoute les chaînes en .data
+    decl_strings = ""
+
     #Recherche des variables globales
     for i in range(0, len(p.children), 2):
         vars = p.children[i]
@@ -391,8 +418,13 @@ mov rdi, [rbx + {8 * (i + 1)}]
 call atoi
 mov [{var}], rax
 """
+    for value, label in global_ctx.strings.items():
+        value = value.encode('utf-8').decode('unicode_escape')
+        decl_strings += f"{label}: db \"{value}\", 0\n"
+
     prog_asm = prog_asm.replace("INIT_VARS", init_vars)
     prog_asm = prog_asm.replace("DECL_VARS", decl_vars)
+    prog_asm = prog_asm.replace("DECL_STRINGS", decl_strings)
 
     #Définition des fonctions
     for i in range(1, len(p.children), 2):
