@@ -26,11 +26,13 @@ class GlobalContext:
     def __init__(self):
         self.functions = {}
         self.globals = {}
-        self.strings = {}          # dictionnaire pour les chaînes littérales
-        self.label_count = 0       # compteur pour les labels des chaînes
+
+        #Pour la gestion des str
+        self.strings = {}
+        self.label_count = 0
     
-    def add_string_literal(self, value):
-        if value in self.strings:
+    def label_string(self, value):
+        if value in self.strings.keys():
             return self.strings[value]
         label = f"str_{self.label_count}"
         self.strings[value] = label

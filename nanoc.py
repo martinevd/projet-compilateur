@@ -5,10 +5,9 @@ from context import VariableContext,FunctionContext,GlobalContext
 # GRAMMAIRE
 # ══════════════════════════════
 
-#HERE
 g = Lark(r"""
 IDENTIFIER: /[a-zA-Z_][a-zA-Z0-9]*/
-TYPE: "int"|"double"|"char"|"bool"|"long"
+TYPE: "int"|"double"|"string"
 NUMBER: /[1-9][0-9]*/|"0" 
 OPBIN: /[+\-]/
 STRING: "\"" /[^\"]*/ "\""
@@ -21,8 +20,8 @@ expression: IDENTIFIER            -> var
     | expression OPBIN expression -> opbin
     | NUMBER                      -> number
     | STRING                      -> string
-    | IDENTIFIER "(" liste_expression ")" -> call_function_expr
     | "len" "(" expression ")"    -> strlen 
+    | IDENTIFIER "(" liste_expression ")" -> call_function_expr
 commande: commande (";" commande)*   -> sequence
     | "while" "(" expression ")" "{" commande "}" -> while
     | IDENTIFIER "=" expression              -> affectation
@@ -54,6 +53,31 @@ registres_input = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
 #Contexte du programme
 global_ctx = GlobalContext()
 
+   
+def type_of_expression(e,name_fct):
+    if e.data == "number":
+        return "int"
+    if e.data == "string":
+        return "string"
+    if e.data == "var":
+        var_ctx = global_ctx.get_variable(e.children[0],name_fct)
+        return var_ctx.var_type
+    if e.data == "opbin":
+        e_left = e.children[0]
+        e_right = e.children[2]
+        type_left_exp = type_of_expression(e_left,name_fct)
+        type_right_exp = type_of_expression(e_right,name_fct)
+        if type_left_exp != type_right_exp:
+            raise TypeError(
+                f"Expression of the left {e_left} is not the same type as the one on the right {e_right}"
+            )
+        return type_of_expression(e_left,name_fct)
+    if e.data == "call_function_expr":
+        fct_to_call = global_ctx.get_function(e.children[0].value)
+        return fct_to_call.return_type
+    if e.data == "strlen":
+        return "int"
+    
 def asm_expression(e,name_fct):
     """
     Génère le code assembleur d'une expression à partir de son arbre syntaxique.
@@ -84,16 +108,19 @@ def asm_expression(e,name_fct):
     
     #String
     if e.data == "string":
-        string_value = e.children[0].value.strip('"')
-        label = global_ctx.add_string_literal(string_value)
-        return f"lea rax, [{label}]"
+        string_val = e.children[0].value.strip('"')
+        label = global_ctx.label_string(string_val)
+        return f"lea rax, [rel {label}]"
     
-    #Len(...)
+    #Len
     if e.data == "strlen":
-        expr = asm_expression(e.children[0], name_fct)
-        return f"""{expr}
+        expr = e.children[0]
+        if type_of_expression(expr,name_fct) != "string":
+            raise TypeError(f"La méthode str_len ne peut être utilisée que sur des chaînes de caractères, pas sur une expression de type {type_of_expression(expr)}.")
+        return f"""{asm_expression(e.children[0], name_fct)}
 mov rdi, rax
-call _strlen"""
+call strlen"""
+    
     
     # Appel de fonction avec retour
     if e.data == "call_function_expr":
@@ -125,43 +152,42 @@ call _strlen"""
 
     
     #Opération binaire
+    # Opération binaire
     if e.data == "opbin":
         e_left = e.children[0]
         e_op = e.children[1]
         e_right = e.children[2]
-        asm_left = asm_expression(e_left,name_fct)
-        asm_right = asm_expression(e_right,name_fct)
-        return f"""{asm_left}
+        
+        type_left = type_of_expression(e_left, name_fct)
+        type_right = type_of_expression(e_right, name_fct)
+
+        # Cas particulier pour la concaténation de strings
+        if e_op.value == "+" and type_left == "string" and type_right == "string":
+            asm_left = asm_expression(e_left, name_fct)    # rax = addr str1
+            asm_right = asm_expression(e_right, name_fct)  # rax = addr str2
+
+            return f"""
+{asm_left}
+push rax              
+{asm_right}
+pop rdi               
+mov rsi, rax          
+call concat_strings  
+"""
+        else:
+            # cas général : entier
+            asm_left = asm_expression(e_left, name_fct)
+            asm_right = asm_expression(e_right, name_fct)
+            return f"""{asm_left}
 push rax
 {asm_right}
 mov rbx, rax
 pop rax
 {op2asm[e_op.value]}"""
 
+
     #Erreur si e n'est pas une expression valide
     raise ValueError(f"Type d'expression non pris en charge : {e.data}") 
-    
-def type_of_expression(e,name_fct):
-    if e.data == "number":
-        return "int"
-    if e.data == "string":
-        return "char"
-    if e.data == "var":
-        var_ctx = global_ctx.get_variable(e.children[0],name_fct)
-        return var_ctx.var_type
-    if e.data == "opbin":
-        e_left = e.children[0]
-        e_right = e.children[2]
-        type_left_exp = type_of_expression(e_left,name_fct)
-        type_right_exp = type_of_expression(e_right,name_fct)
-        if type_left_exp != type_right_exp:
-            raise TypeError(
-                f"Expression of the left {e_left} is not the same type as the one on the right {e_right}"
-            )
-        return type_of_expression(e_left,name_fct)
-    if e.data == "call_function_expr":
-        fct_to_call = global_ctx.get_function(e.children[0].value)
-        return fct_to_call.return_type
       
 def asm_commande(c,name_fct):
     """
@@ -223,9 +249,10 @@ mov [{name_var}], rax"""
     if c.data == "skip": return "nop"
     
     #Print
-    if c.data == "print": 
+    if c.data == "print":
         type_exp = type_of_expression(c.children[0], name_fct)
-        if type_exp == "char":
+        
+        if type_exp == "string":
             fmt = "fmt_str"
         else:
             fmt = "fmt_int"
@@ -418,13 +445,9 @@ mov rdi, [rbx + {8 * (i + 1)}]
 call atoi
 mov [{var}], rax
 """
-    for value, label in global_ctx.strings.items():
-        value = value.encode('utf-8').decode('unicode_escape')
-        decl_strings += f"{label}: db \"{value}\", 0\n"
 
     prog_asm = prog_asm.replace("INIT_VARS", init_vars)
     prog_asm = prog_asm.replace("DECL_VARS", decl_vars)
-    prog_asm = prog_asm.replace("DECL_STRINGS", decl_strings)
 
     #Définition des fonctions
     for i in range(1, len(p.children), 2):
@@ -460,6 +483,13 @@ mov [{var}], rax
         asm_f += f"{asm_function(p.children[i])}\n"
     
     prog_asm = prog_asm.replace("COMMANDE", asm_f)
+
+    #Ecriture des strings
+    for value, label in global_ctx.strings.items():
+        value = value.encode('utf-8').decode('unicode_escape')
+        decl_strings += f"{label}: db \"{value}\", 0\n"
+    prog_asm = prog_asm.replace("DECL_STRINGS", decl_strings)
+
     return prog_asm 
 
 
@@ -601,7 +631,6 @@ def pp_function(f):
     {pp_commande(commande)}
 }}"""
 
-#HERE
 def pp_program(p):
     """
     Génère une représentation lisible (pretty-print) du programme à partir de son arbre syntaxique.
