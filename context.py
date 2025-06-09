@@ -27,6 +27,18 @@ class GlobalContext:
         self.functions = {}
         self.globals = {}
 
+        #Pour la gestion des str
+        self.strings = {}
+        self.label_count = 0
+    
+    def label_string(self, value):
+        if value in self.strings.keys():
+            return self.strings[value]
+        label = f"str_{self.label_count}"
+        self.strings[value] = label
+        self.label_count += 1
+        return label 
+
     def add_function(self, func_ctx):
         self.functions[func_ctx.name] = func_ctx
 

@@ -1,12 +1,14 @@
 extern printf, atoi, malloc, strcpy, strcat, sprintf
 
 section .data
-DECL_VARS
+
 
 argv: dq 0
 fmt_int: db "%d", 10, 0
 fmt_str: db "%s", 10, 0
-DECL_STRINGS
+str_0: db "hello ", 0
+str_1: db "world", 0
+
 
 global main
 section .text
@@ -16,15 +18,52 @@ push rbp
 mov rbp, rsp
 mov [argv], rsi
 
-INIT_VARS
 
-CALL_EXEC
+
+call exec
 
 mov rsp, rbp
 pop rbp
 ret
 
-COMMANDE
+exec:
+push rbp
+    mov rbp, rsp
+    sub rsp, 8
+lea rax, [rel str_0]
+mov [rbp - 8], rax
+
+sub rsp, 8
+lea rax, [rel str_1]
+mov [rbp - 16], rax
+
+
+mov rax, [rbp - 8]
+push rax              
+mov rax, [rbp - 16]
+pop rdi               
+mov rsi, rax          
+call concat_strings  
+
+mov rsi, rax
+mov rdi, fmt_str
+xor rax, rax
+call printf
+
+mov rax, [rbp - 8]
+mov rdi, rax
+call strlen
+mov rsi, rax
+mov rdi, fmt_int
+xor rax, rax
+call printf
+
+end_exec:
+    mov rsp, rbp
+    pop rbp
+    ret
+    
+
 
 strlen:
     push rbp
@@ -75,3 +114,4 @@ concat_strings:
     mov rsp, rbp
     pop rbp
     ret
+
