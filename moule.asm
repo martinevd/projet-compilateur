@@ -6,6 +6,7 @@ DECL_VARS
 argv: dq 0
 fmt_int: db "%d", 10, 0
 fmt_str: db "%s", 10, 0
+fmt_char: db "%c", 10, 0
 DECL_STRINGS
 
 global main

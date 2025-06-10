@@ -6,6 +6,7 @@ section .data
 argv: dq 0
 fmt_int: db "%d", 10, 0
 fmt_str: db "%s", 10, 0
+fmt_char: db "%c", 10, 0
 str_0: db "hello ", 0
 str_1: db "world", 0
 
@@ -57,6 +58,56 @@ mov rsi, rax
 mov rdi, fmt_int
 xor rax, rax
 call printf
+
+sub rsp, 8
+mov rax, [rbp - 8]
+mov rdi, rax
+call strlen
+push rax
+mov rax, 1
+mov rbx, rax
+pop rax
+sub rax, rbx
+mov [rbp - 24], rax
+
+loop0:mov rax, [rbp - 24]
+cmp rax, 0
+jz end0
+
+mov rax, [rbp - 8]         
+push rax
+mov rax, [rbp - 8]
+mov rdi, rax
+call strlen
+push rax
+mov rax, [rbp - 24]
+mov rbx, rax
+pop rax
+sub rax, rbx
+push rax
+mov rax, 1
+mov rbx, rax
+pop rax
+sub rax, rbx       
+mov rbx, rax        
+pop rax           
+add rax, rbx        
+movzx rax, byte [rax]  
+
+mov rsi, rax
+mov rdi, fmt_char
+xor rax, rax
+call printf
+
+mov rax, [rbp - 24]
+push rax
+mov rax, 1
+mov rbx, rax
+pop rax
+sub rax, rbx
+mov [rbp - 24], rax
+jmp loop0
+end0: nop
 
 end_exec:
     mov rsp, rbp
