@@ -5,6 +5,7 @@ from context import VariableContext,FunctionContext,GlobalContext
 # GRAMMAIRE
 # ══════════════════════════════
 
+#HERE
 g = Lark(r"""
 IDENTIFIER: /[a-zA-Z_][a-zA-Z0-9]*/
 TYPE: "int"|"double"|"string"|"char"
@@ -126,7 +127,10 @@ call strlen"""
     
     #Charat
     if e.data == "charat":
-        asm_str = asm_expression(e.children[0], name_fct) 
+        expr = e.children[0]
+        asm_str = asm_expression(expr, name_fct) 
+        if type_of_expression(expr,name_fct) != "string":
+            raise TypeError(f"L'expression attendu est un string et non un {type_of_expression(expr,name_fct)}.")
         asm_index = asm_expression(e.children[1], name_fct)  
         return f"""
 {asm_str}         
@@ -527,7 +531,7 @@ def pp_expression(e):
     """
 
     #Variable et nombre
-    if e.data in ("var","number"): return f"{e.children[0].value}"
+    if e.data in ("var","number","string"): return f"{e.children[0].value}"
 
     #Appel de fonction avec retour
     if e.data == "call_function_expr":
@@ -543,7 +547,15 @@ def pp_expression(e):
         e_op = e.children[1]
         e_right = e.children[2]
         return f"{pp_expression(e_left)} {e_op.value} {pp_expression(e_right)}"
-    
+
+    #Len
+    if e.data == "strlen":
+        return f"len({pp_expression(e.children[0])})"
+
+    #charat 
+    if e.data == "charat":
+        return f"{pp_expression(e.children[0])}[{pp_expression(e.children[1])}]"
+
     #Erreur si e n'est pas une expression valide
     raise ValueError(f"Type d'expression non pris en charge : {e.data}") 
 
