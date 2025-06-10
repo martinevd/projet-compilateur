@@ -7,7 +7,7 @@ from context import VariableContext,FunctionContext,GlobalContext
 
 g = Lark(r"""
 IDENTIFIER: /[a-zA-Z_][a-zA-Z0-9]*/
-TYPE: "int"|"double"|"string"
+TYPE: "int"|"double"|"string"|"char"
 NUMBER: /[1-9][0-9]*/|"0" 
 OPBIN: /[+\-]/
 STRING: "\"" /[^\"]*/ "\""
@@ -20,7 +20,8 @@ expression: IDENTIFIER            -> var
     | expression OPBIN expression -> opbin
     | NUMBER                      -> number
     | STRING                      -> string
-    | "len" "(" expression ")"    -> strlen 
+    | "len" "(" expression ")"    -> strlen
+    | expression "[" expression "]"  -> charat  
     | IDENTIFIER "(" liste_expression ")" -> call_function_expr
 commande: commande (";" commande)*   -> sequence
     | "while" "(" expression ")" "{" commande "}" -> while
@@ -77,6 +78,8 @@ def type_of_expression(e,name_fct):
         return fct_to_call.return_type
     if e.data == "strlen":
         return "int"
+    if e.data == "charat":
+        return "char"
     
 def asm_expression(e,name_fct):
     """
@@ -121,6 +124,19 @@ def asm_expression(e,name_fct):
 mov rdi, rax
 call strlen"""
     
+    #Charat
+    if e.data == "charat":
+        asm_str = asm_expression(e.children[0], name_fct) 
+        asm_index = asm_expression(e.children[1], name_fct)  
+        return f"""
+{asm_str}         
+push rax
+{asm_index}       
+mov rbx, rax        
+pop rax           
+add rax, rbx        
+movzx rax, byte [rax]  
+"""
     
     # Appel de fonction avec retour
     if e.data == "call_function_expr":
@@ -254,6 +270,8 @@ mov [{name_var}], rax"""
         
         if type_exp == "string":
             fmt = "fmt_str"
+        elif type_exp == "char":
+            fmt = "fmt_char"    
         else:
             fmt = "fmt_int"
         return f"""{asm_expression(c.children[0],name_fct)}
