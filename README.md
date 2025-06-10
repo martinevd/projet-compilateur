@@ -11,6 +11,8 @@ Cette fonctionnalité a été réalisé par Martin EVRARD.
 
 Ces fonctions peuvent être recursives, peuvent introduire des variables locales pouvant prendre le nom des variables globales (priorité aux variables locals lues), peuvent s'appeler mutellement, peuvent modifier des variables globales et peuvent retourner (ou non) un résultat.
 
+Malheuresement, une fonction ne peut prendre qu'au plus 6 arguments. 
+
 ## Typage: 
 
 La branche typage_statique représente l'implémentation que j'ai fait (LEBOEUF Eliott). Cette dernière permettait de réaliser différents types (int, long, ...) et d'utiliser les sous registres (eax, ax...) suivant la taille des types. Cette dernière fonctionnalité n'a pas été ajouté dans la version finale car nous n'arrivions pas à la merge (différences d'implémentations entre nos branches).
