@@ -18,7 +18,13 @@ Malheuresement, une fonction ne peut prendre qu'au plus 6 arguments.
 La branche typage_statique représente l'implémentation que j'ai fait (LEBOEUF Eliott). Cette dernière permettait de réaliser différents types (int, long, ...) et d'utiliser les sous registres (eax, ax...) suivant la taille des types. Cette dernière fonctionnalité n'a pas été ajouté dans la version finale car nous n'arrivions pas à la merge (différences d'implémentations entre nos branches).
 
 
-## String: TODO
+## String: 
+
+Cette partie a été réalisée par Lam Alexandre.
+
+Nous avons réussi à implémenter les string et on peut les concaténer, pas plus de deux en même temps, on peut trouver un caractère dans la chaîne et on arrive à calculer la longueur d'un string avec une fonction strlen.
+
+
 ## Double : TODO
 
 **ATTENTION** : Le programme doit obligatoirement avoir une fonction "**exec**" afin de pouvoir l'exécuter en asm. Par ailleurs, le programme n'affiche pas le return de "exec" (s'il y en a un) dans la console, il est donc demandé d'y mettre un printf.
