@@ -27,7 +27,7 @@ Nous avons réussi à implémenter les string et on peut les concaténer, pas pl
 
 ## Double : TODO
 
-Cette partie, réalisée par Paolo ESCOBAR, est contenue dans le dossier "Double" et n'est pas merge avec le reste du travail du groupe. L'enjeu était de stocker les valeurs décimales dans la section .data et d'utiliser les registres prévus pour les doubles. J'ai essayé d'implémenter l'affectation, le print, les additions et les soustractions pour les doubles. Cependant, j'ai eu une erreur de segmentation dont j'ai pas réussi à me débarrasser malgré mes efforts. Ce problème m'a empêché d'implémenter la conversion des int en double afin de réaliser des opérations entre int et double.
+Cette partie, réalisée par Paolo ESCOBAR, est contenue dans le dossier "Double" et n'est pas merge avec le reste du travail du groupe. L'enjeu était de stocker les valeurs décimales dans la section .data et d'utiliser les registres prévus pour les doubles. J'ai essayé d'implémenter l'affectation, le print, les additions et les soustractions pour les doubles. Cependant, j'ai eu une erreur de segmentation dont je n'ai pas réussi à me débarrasser malgré mes efforts. Ce problème m'a empêché d'implémenter la conversion des int en double afin de réaliser des opérations entre int et double.
 
 **ATTENTION** : Le programme doit obligatoirement avoir une fonction "**exec**" afin de pouvoir l'exécuter en asm. Par ailleurs, le programme n'affiche pas le return de "exec" (s'il y en a un) dans la console, il est donc demandé d'y mettre un printf.
 
